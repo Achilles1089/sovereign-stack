@@ -46,11 +46,24 @@ var backupInitCmd = &cobra.Command{
 	RunE:  runBackupInit,
 }
 
+var backupScheduleCmd = &cobra.Command{
+	Use:   "schedule",
+	Short: "Set up automated backup schedule",
+	Long: `Configure a cron job for automated daily backups.
+
+By default, backups run daily at 3:00 AM.`,
+	RunE: runBackupSchedule,
+}
+
+var backupDisable bool
+
 func init() {
+	backupScheduleCmd.Flags().BoolVar(&backupDisable, "disable", false, "Remove the automated backup schedule")
 	backupCmd.AddCommand(backupListCmd)
 	backupCmd.AddCommand(backupRestoreCmd)
 	backupCmd.AddCommand(backupPruneCmd)
 	backupCmd.AddCommand(backupInitCmd)
+	backupCmd.AddCommand(backupScheduleCmd)
 	rootCmd.AddCommand(backupCmd)
 }
 
@@ -186,6 +199,47 @@ func runBackupInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("  ✓ Repository initialized at:", config.ConfigDir()+"/backups")
+	fmt.Println()
+	return nil
+}
+
+func runBackupSchedule(cmd *cobra.Command, args []string) error {
+	fmt.Println()
+	fmt.Println("  ⚡ Sovereign Stack — Backup Schedule")
+	fmt.Println("  ─────────────────────────────────────")
+	fmt.Println()
+
+	if backupDisable {
+		if err := backupPkg.RemoveCron(); err != nil {
+			return fmt.Errorf("failed to remove schedule: %w", err)
+		}
+		fmt.Println("  ✓ Automated backup schedule removed")
+		fmt.Println()
+		return nil
+	}
+
+	cfgPath := config.ConfigPath(GetConfigPath())
+	cfg := config.LoadOrDefault(cfgPath)
+	schedule := cfg.Backup.Schedule
+	if schedule == "" {
+		schedule = "0 3 * * *" // Daily at 3am
+	}
+
+	// Find the sovereign binary
+	binaryPath, err := os.Executable()
+	if err != nil {
+		binaryPath = "sovereign" // Fallback
+	}
+
+	if err := backupPkg.SetupCron(schedule, binaryPath); err != nil {
+		return fmt.Errorf("failed to set up schedule: %w", err)
+	}
+
+	fmt.Printf("  ✓ Automated backup scheduled: %s\n", schedule)
+	fmt.Printf("  Binary: %s\n", binaryPath)
+	fmt.Println()
+	fmt.Println("  Check with: crontab -l")
+	fmt.Println("  Remove with: sovereign backup schedule --disable")
 	fmt.Println()
 	return nil
 }
