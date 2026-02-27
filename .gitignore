@@ -1,0 +1,28 @@
+# Binaries
+sovereign
+sovereign-*
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+vendor/
+
+# Node / Dashboard
+dashboard/node_modules/
+dashboard/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Research (local only)
+research/
+.swarm/
