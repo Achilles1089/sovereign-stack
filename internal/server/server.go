@@ -51,6 +51,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/apps", s.handleApps)
 	mux.HandleFunc("/api/ai/models", s.handleAIModels)
 	mux.HandleFunc("/api/ai/chat", s.handleAIChat)
+	mux.HandleFunc("/api/ai/server-chat", s.handleServerChat)
 	mux.HandleFunc("/api/ai/status", s.handleAIStatus)
 
 	// Serve static dashboard files (SPA fallback)
@@ -202,6 +203,53 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 
 	err := s.client.Chat(req.Model, req.Messages, func(content string, done bool) {
+		fmt.Fprint(w, content)
+		if ok {
+			flusher.Flush()
+		}
+	})
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleServerChat(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Message string `json:"message"`
+		Model   string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	model := req.Model
+	if model == "" {
+		model = s.cfg.AI.DefaultModel
+	}
+
+	// Build live server context
+	ctx := ai.BuildServerContext(s.cfg)
+	systemPrompt := ai.SystemPrompt(ctx)
+
+	// Construct messages with system prompt
+	messages := []ai.ChatMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: req.Message},
+	}
+
+	// Stream the response
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Transfer-Encoding", "chunked")
+	flusher, ok := w.(http.Flusher)
+
+	err := s.client.Chat(model, messages, func(content string, done bool) {
 		fmt.Fprint(w, content)
 		if ok {
 			flusher.Flush()
