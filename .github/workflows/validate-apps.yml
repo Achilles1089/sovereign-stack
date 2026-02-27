@@ -1,0 +1,30 @@
+name: Validate App Manifests
+
+on:
+  pull_request:
+    paths:
+      - 'internal/apps/installer.go'
+
+jobs:
+  validate:
+    name: Validate App Catalog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run app catalog tests
+        run: go test -v ./internal/apps/...
+
+      - name: Check for duplicate names
+        run: |
+          go run -exec "echo" . 2>&1 || true
+          echo "Checking app catalog..."
+          go test -run TestBuiltinApps -v ./internal/apps/...
+
+      - name: Verify build
+        run: go build -v ./...
