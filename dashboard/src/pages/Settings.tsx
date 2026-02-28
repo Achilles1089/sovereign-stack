@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { api, type AIStatus, type SystemResources } from '../api/client';
 
 export default function Settings() {
-    const [domain, setDomain] = useState('localhost');
-    const [aiModel, setAiModel] = useState('qwen2.5:32b');
+    const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
+    const [resources, setResources] = useState<SystemResources | null>(null);
+
+    useEffect(() => {
+        api.getAIStatus().then(d => setAiStatus(d)).catch(() => { });
+        api.getResources().then(d => setResources(d)).catch(() => { });
+    }, []);
 
     return (
         <>
@@ -12,61 +18,58 @@ export default function Settings() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {/* Server */}
                 <div className="card">
                     <div className="card-title">Server</div>
                     <div style={{ display: 'grid', gap: 16 }}>
                         <div>
-                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Domain</label>
-                            <input
-                                className="chat-input"
-                                value={domain}
-                                onChange={e => setDomain(e.target.value)}
-                                placeholder="myserver.example.com"
-                                style={{ maxWidth: 400 }}
-                            />
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Platform</label>
+                            <span className="mono">
+                                {resources?.cpu_model || 'Unknown CPU'} — {resources?.cpu_cores || '?'} cores
+                            </span>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>GPU</label>
+                            <span className="mono">{resources?.gpu_name || 'CPU Only'} ({resources?.gpu_type || 'none'})</span>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Storage</label>
+                            <span className="mono">{resources?.disk_free_gb || '?'} GB free / {resources?.disk_total_gb || '?'} GB total</span>
                         </div>
                         <div>
                             <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>SSL</label>
                             <span className="badge badge-green">Auto-SSL via Caddy</span>
                         </div>
-                        <div>
-                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Platform</label>
-                            <span className="mono">macOS (arm64) — Personal Mode</span>
-                        </div>
                     </div>
                 </div>
 
-                {/* AI */}
                 <div className="card">
                     <div className="card-title">AI Inference</div>
                     <div style={{ display: 'grid', gap: 16 }}>
                         <div>
                             <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Default Model</label>
-                            <select
-                                className="chat-input"
-                                value={aiModel}
-                                onChange={e => setAiModel(e.target.value)}
-                                style={{ maxWidth: 400 }}
-                            >
-                                <option value="qwen2.5:32b">qwen2.5:32b (Flagship)</option>
-                                <option value="qwen2.5:14b">qwen2.5:14b (Strong)</option>
-                                <option value="qwen2.5:7b">qwen2.5:7b (Medium)</option>
-                                <option value="qwen2.5:0.5b">qwen2.5:0.5b (Lightweight)</option>
-                            </select>
+                            <span className="mono">{aiStatus?.model || 'none configured'}</span>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Recommended</label>
+                            <span className="mono">{aiStatus?.recommended || '—'}</span>
                         </div>
                         <div>
                             <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Ollama Mode</label>
-                            <span className="mono">native (Metal GPU acceleration)</span>
+                            <span className="mono">{aiStatus?.mode || '—'}</span>
                         </div>
                         <div>
                             <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Ollama Host</label>
-                            <span className="mono">localhost:11434</span>
+                            <span className="mono">{aiStatus?.host || '—'}</span>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>GPU Tier</label>
+                            <span className={`badge ${aiStatus?.gpu_tier === 'cpu' ? 'badge-amber' : 'badge-green'}`}>
+                                {aiStatus?.gpu_tier || '—'}
+                            </span>
                         </div>
                     </div>
                 </div>
 
-                {/* Config File */}
                 <div className="card">
                     <div className="card-title">Configuration</div>
                     <div style={{ display: 'grid', gap: 16 }}>
@@ -82,15 +85,6 @@ export default function Settings() {
                             <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Data Directory</label>
                             <code>~/.sovereign/data/</code>
                         </div>
-                    </div>
-                </div>
-
-                {/* Danger Zone */}
-                <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}>
-                    <div className="card-title" style={{ color: 'var(--accent-red)' }}>Danger Zone</div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                        <button className="btn btn-danger">🔄 Reset Configuration</button>
-                        <button className="btn btn-danger">🗑️ Remove All Data</button>
                     </div>
                 </div>
             </div>

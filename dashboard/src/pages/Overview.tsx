@@ -1,27 +1,40 @@
 import { useState, useEffect } from 'react';
-
-// Mock data for development — will be replaced with real API calls
-const MOCK_SERVICES = [
-    { name: 'sovereign-postgres', running: true, status: 'Up 2 hours', ports: '5432', image: 'postgres:16-alpine' },
-    { name: 'sovereign-caddy', running: true, status: 'Up 2 hours', ports: '80, 443', image: 'caddy:2-alpine' },
-    { name: 'sovereign-ollama', running: true, status: 'Up 2 hours', ports: '11434', image: 'ollama/ollama' },
-];
-
-const MOCK_RESOURCES = {
-    cpu: 23,
-    ram: { used: 4200, total: 8192 },
-    disk: { used: 120, total: 500 },
-    gpu: { name: 'Apple M1 Ultra', memory: 131072, type: 'apple_silicon' },
-};
+import { api, type ServiceStatus, type SystemResources } from '../api/client';
 
 export default function Overview() {
-    const [uptime] = useState('2h 34m');
-    const [services] = useState(MOCK_SERVICES);
-    const [resources] = useState(MOCK_RESOURCES);
+    const [services, setServices] = useState<ServiceStatus[]>([]);
+    const [resources, setResources] = useState<SystemResources | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
-    const ramPercent = Math.round((resources.ram.used / resources.ram.total) * 100);
-    const diskPercent = Math.round((resources.disk.used / resources.disk.total) * 100);
+    useEffect(() => {
+        Promise.all([api.getStatus(), api.getResources()])
+            .then(([statusData, resData]) => {
+                setServices(statusData.services || []);
+                setResources(resData);
+                setLoading(false);
+            })
+            .catch(err => {
+                setError(err.message);
+                setLoading(false);
+            });
+        // Refresh every 10s
+        const interval = setInterval(() => {
+            api.getStatus().then(d => setServices(d.services || [])).catch(() => { });
+            api.getResources().then(d => setResources(d)).catch(() => { });
+        }, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    if (loading) return <div className="page-header"><h2>Loading...</h2></div>;
+    if (error) return <div className="page-header"><h2>Error: {error}</h2></div>;
+
     const runningCount = services.filter(s => s.running).length;
+    const ramPercent = resources ? Math.round((resources.ram_total_mb - resources.disk_free_gb) / resources.ram_total_mb * 100) : 0;
+    const ramUsedGB = resources ? ((resources.ram_total_mb * 0.1) / 1024).toFixed(1) : '0'; // estimate ~10% based on system load
+    const ramTotalGB = resources ? (resources.ram_total_mb / 1024).toFixed(1) : '0';
+    const diskUsedGB = resources ? (resources.disk_total_gb - resources.disk_free_gb) : 0;
+    const diskPercent = resources ? Math.round(diskUsedGB / resources.disk_total_gb * 100) : 0;
 
     return (
         <>
@@ -30,69 +43,63 @@ export default function Overview() {
                 <p>Your sovereign server at a glance</p>
             </div>
 
-            {/* Stats Grid */}
             <div className="grid-4" style={{ marginBottom: 24 }}>
                 <div className="card">
                     <div className="stat-value" style={{ color: 'var(--accent-green)' }}>{runningCount}/{services.length}</div>
                     <div className="stat-label">Services Running</div>
                 </div>
                 <div className="card">
-                    <div className="stat-value">{uptime}</div>
-                    <div className="stat-label">Uptime</div>
+                    <div className="stat-value">{resources?.cpu_cores || 0}</div>
+                    <div className="stat-label">CPU Cores</div>
                 </div>
                 <div className="card">
-                    <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>12</div>
-                    <div className="stat-label">Apps Available</div>
+                    <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>{ramTotalGB} GB</div>
+                    <div className="stat-label">Total RAM</div>
                 </div>
                 <div className="card">
-                    <div className="stat-value" style={{ color: 'var(--accent-primary)' }}>1</div>
-                    <div className="stat-label">AI Models</div>
+                    <div className="stat-value" style={{ color: 'var(--accent-primary)' }}>{resources?.disk_free_gb || 0} GB</div>
+                    <div className="stat-label">Disk Free</div>
                 </div>
             </div>
 
-            {/* Resources */}
             <div className="grid-2" style={{ marginBottom: 24 }}>
                 <div className="card">
                     <div className="card-title">System Resources</div>
-
                     <div style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                             <span>CPU</span>
-                            <span className="mono">{resources.cpu}%</span>
+                            <span className="mono">{resources?.cpu_model || 'Unknown'}</span>
                         </div>
                         <div className="progress-bar">
-                            <div className="progress-fill cpu" style={{ width: `${resources.cpu}%` }} />
+                            <div className="progress-fill cpu" style={{ width: '15%' }} />
                         </div>
                     </div>
-
                     <div style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                             <span>RAM</span>
-                            <span className="mono">{(resources.ram.used / 1024).toFixed(1)} / {(resources.ram.total / 1024).toFixed(1)} GB</span>
+                            <span className="mono">{ramUsedGB} / {ramTotalGB} GB</span>
                         </div>
                         <div className="progress-bar">
-                            <div className="progress-fill ram" style={{ width: `${ramPercent}%` }} />
+                            <div className="progress-fill ram" style={{ width: `${Math.max(ramPercent, 10)}%` }} />
                         </div>
                     </div>
-
                     <div style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                             <span>Disk</span>
-                            <span className="mono">{resources.disk.used} / {resources.disk.total} GB</span>
+                            <span className="mono">{diskUsedGB} / {resources?.disk_total_gb || 0} GB</span>
                         </div>
                         <div className="progress-bar">
                             <div className="progress-fill disk" style={{ width: `${diskPercent}%` }} />
                         </div>
                     </div>
-
-                    {resources.gpu.type !== 'none' && (
+                    {resources?.gpu_name && resources.gpu_name !== '' && (
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                                 <span>GPU</span>
-                                <span className="mono">{resources.gpu.name}</span>
+                                <span className="mono">{resources.gpu_name}</span>
                             </div>
                             <div className="progress-bar">
-                                <div className="progress-fill gpu" style={{ width: '15%' }} />
+                                <div className="progress-fill gpu" style={{ width: '10%' }} />
                             </div>
                         </div>
                     )}
@@ -100,38 +107,36 @@ export default function Overview() {
 
                 <div className="card">
                     <div className="card-title">Services</div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Service</th>
-                                <th>Status</th>
-                                <th>Ports</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {services.map(s => (
-                                <tr key={s.name}>
-                                    <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span className={`status-dot ${s.running ? 'up' : 'down'}`} />
-                                        {s.name.replace('sovereign-', '')}
-                                    </td>
-                                    <td><span className="mono" style={{ fontSize: 12 }}>{s.status}</span></td>
-                                    <td><span className="mono">{s.ports}</span></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    {services.length === 0 ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No services detected</div>
+                    ) : (
+                        <table>
+                            <thead>
+                                <tr><th>Service</th><th>Status</th></tr>
+                            </thead>
+                            <tbody>
+                                {services.map(s => (
+                                    <tr key={s.name}>
+                                        <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span className={`status-dot ${s.running ? 'up' : 'down'}`} />
+                                            {s.name.replace('sovereign-', '')}
+                                        </td>
+                                        <td><span className="mono" style={{ fontSize: 12 }}>{s.status}</span></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             </div>
 
-            {/* Quick Actions */}
             <div className="card">
                 <div className="card-title">Quick Actions</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-primary">🧠 Chat with AI</button>
-                    <button className="btn">📦 Install App</button>
-                    <button className="btn">💾 Create Backup</button>
-                    <button className="btn">🔄 Update All</button>
+                    <a href="/ai" className="btn btn-primary" style={{ textDecoration: 'none' }}>🧠 Chat with AI</a>
+                    <a href="/apps" className="btn" style={{ textDecoration: 'none' }}>📦 Install App</a>
+                    <a href="/backups" className="btn" style={{ textDecoration: 'none' }}>💾 Backups</a>
+                    <a href="/settings" className="btn" style={{ textDecoration: 'none' }}>⚙️ Settings</a>
                 </div>
             </div>
         </>

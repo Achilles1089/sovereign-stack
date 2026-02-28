@@ -9,13 +9,13 @@ export interface ServiceStatus {
 }
 
 export interface SystemResources {
-    cpu_percent: number;
-    ram_used_mb: number;
+    cpu_model: string;
+    cpu_cores: number;
     ram_total_mb: number;
-    disk_used_gb: number;
     disk_total_gb: number;
-    gpu_name: string;
+    disk_free_gb: number;
     gpu_type: string;
+    gpu_name: string;
     gpu_memory_mb: number;
 }
 
@@ -34,8 +34,17 @@ export interface AIModel {
     modified_at: string;
 }
 
+export interface AIStatus {
+    running: boolean;
+    host: string;
+    mode: string;
+    model: string;
+    gpu_tier: string;
+    recommended: string;
+}
+
 export interface ChatMessage {
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system';
     content: string;
 }
 
@@ -49,15 +58,19 @@ export const api = {
     getStatus: () => fetchJSON<{ services: ServiceStatus[] }>('/status'),
     getResources: () => fetchJSON<SystemResources>('/resources'),
     getApps: () => fetchJSON<{ apps: AppInfo[] }>('/apps'),
+    getAIStatus: () => fetchJSON<AIStatus>('/ai/status'),
+    getModels: () => fetchJSON<{ models: AIModel[] }>('/ai/models'),
+
     installApp: (name: string) => fetch(API_BASE + `/apps/${name}/install`, { method: 'POST' }),
     removeApp: (name: string) => fetch(API_BASE + `/apps/${name}`, { method: 'DELETE' }),
-    getModels: () => fetchJSON<{ models: AIModel[] }>('/ai/models'),
-    chat: async (model: string, messages: ChatMessage[], onChunk: (text: string) => void) => {
-        const res = await fetch(API_BASE + '/ai/chat', {
+
+    serverChat: async (message: string, model: string, onChunk: (text: string) => void) => {
+        const res = await fetch(API_BASE + '/ai/server-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, messages }),
+            body: JSON.stringify({ message, model }),
         });
+        if (!res.ok) throw new Error(`Chat error: ${res.status}`);
         const reader = res.body?.getReader();
         if (!reader) return;
         const decoder = new TextDecoder();
@@ -67,6 +80,21 @@ export const api = {
             onChunk(decoder.decode(value));
         }
     },
-    getBackups: () => fetchJSON<{ snapshots: any[] }>('/backups'),
-    triggerBackup: () => fetch(API_BASE + '/backups', { method: 'POST' }),
+
+    chat: async (model: string, messages: ChatMessage[], onChunk: (text: string) => void) => {
+        const res = await fetch(API_BASE + '/ai/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, messages }),
+        });
+        if (!res.ok) throw new Error(`Chat error: ${res.status}`);
+        const reader = res.body?.getReader();
+        if (!reader) return;
+        const decoder = new TextDecoder();
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            onChunk(decoder.decode(value));
+        }
+    },
 };

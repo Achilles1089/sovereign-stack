@@ -1,13 +1,30 @@
-import { useState } from 'react';
-
-const SERVICES = [
-    { name: 'postgres', image: 'postgres:16-alpine', running: true, uptime: '2h 34m', ports: '5432', cpu: '2.1%', ram: '128 MB' },
-    { name: 'caddy', image: 'caddy:2-alpine', running: true, uptime: '2h 34m', ports: '80, 443', cpu: '0.5%', ram: '24 MB' },
-    { name: 'ollama', image: 'ollama/ollama', running: true, uptime: '2h 30m', ports: '11434', cpu: '8.3%', ram: '2.1 GB' },
-];
+import { useState, useEffect } from 'react';
+import { api, type ServiceStatus } from '../api/client';
 
 export default function Services() {
-    const [services] = useState(SERVICES);
+    const [services, setServices] = useState<ServiceStatus[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const fetchServices = () => {
+        api.getStatus()
+            .then(data => {
+                setServices(data.services || []);
+                setLoading(false);
+            })
+            .catch(err => {
+                setError(err.message);
+                setLoading(false);
+            });
+    };
+
+    useEffect(() => {
+        fetchServices();
+        const interval = setInterval(fetchServices, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    if (loading) return <div className="page-header"><h2>Loading services...</h2></div>;
 
     return (
         <>
@@ -16,53 +33,54 @@ export default function Services() {
                 <p>Manage your sovereign infrastructure services</p>
             </div>
 
+            {error && (
+                <div className="card" style={{ marginBottom: 16, borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                    <span style={{ color: 'var(--accent-red)' }}>⚠️ {error}</span>
+                </div>
+            )}
+
             <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <div className="card-title" style={{ marginBottom: 0 }}>Core Services</div>
+                    <div className="card-title" style={{ marginBottom: 0 }}>Docker Services</div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-sm">🔄 Restart All</button>
-                        <button className="btn btn-sm">📋 Compose</button>
+                        <button className="btn btn-sm" onClick={fetchServices}>🔄 Refresh</button>
                     </div>
                 </div>
-                <div className="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Service</th>
-                                <th>Status</th>
-                                <th>Image</th>
-                                <th>Uptime</th>
-                                <th>Ports</th>
-                                <th>CPU</th>
-                                <th>RAM</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {services.map(s => (
-                                <tr key={s.name}>
-                                    <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span className={`status-dot ${s.running ? 'up' : 'down'}`} />
-                                        <strong>{s.name}</strong>
-                                    </td>
-                                    <td><span className={`badge ${s.running ? 'badge-green' : 'badge-red'}`}>{s.running ? 'Running' : 'Stopped'}</span></td>
-                                    <td><code>{s.image}</code></td>
-                                    <td className="mono">{s.uptime}</td>
-                                    <td className="mono">{s.ports}</td>
-                                    <td className="mono">{s.cpu}</td>
-                                    <td className="mono">{s.ram}</td>
-                                    <td>
-                                        <div style={{ display: 'flex', gap: 4 }}>
-                                            <button className="btn btn-sm">🔄</button>
-                                            <button className="btn btn-sm">📋</button>
-                                            <button className="btn btn-sm btn-danger">⏹</button>
-                                        </div>
-                                    </td>
+                {services.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', padding: 20, textAlign: 'center' }}>
+                        No Docker services detected. Run <code>sovereign init</code> to set up.
+                    </div>
+                ) : (
+                    <div className="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Status</th>
+                                    <th>Image</th>
+                                    <th>Ports</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {services.map(s => (
+                                    <tr key={s.name}>
+                                        <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span className={`status-dot ${s.running ? 'up' : 'down'}`} />
+                                            <strong>{s.name}</strong>
+                                        </td>
+                                        <td>
+                                            <span className={`badge ${s.running ? 'badge-green' : 'badge-red'}`}>
+                                                {s.running ? 'Running' : 'Stopped'}
+                                            </span>
+                                        </td>
+                                        <td><code>{s.image || '—'}</code></td>
+                                        <td className="mono">{s.ports || '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         </>
     );
