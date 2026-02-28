@@ -61,8 +61,16 @@ export const api = {
     getAIStatus: () => fetchJSON<AIStatus>('/ai/status'),
     getModels: () => fetchJSON<{ models: AIModel[] }>('/ai/models'),
 
-    installApp: (name: string) => fetch(API_BASE + `/apps/${name}/install`, { method: 'POST' }),
-    removeApp: (name: string) => fetch(API_BASE + `/apps/${name}`, { method: 'DELETE' }),
+    installApp: (name: string) => fetch(API_BASE + '/apps/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    }).then(r => r.json()),
+    removeApp: (name: string) => fetch(API_BASE + '/apps/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    }).then(r => r.json()),
 
     serverChat: async (message: string, model: string, onChunk: (text: string) => void) => {
         const res = await fetch(API_BASE + '/ai/server-chat', {

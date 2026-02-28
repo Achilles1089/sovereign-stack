@@ -49,6 +49,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/resources", s.handleResources)
 	mux.HandleFunc("/api/apps", s.handleApps)
+	mux.HandleFunc("/api/apps/install", s.handleAppInstall)
+	mux.HandleFunc("/api/apps/remove", s.handleAppRemove)
 	mux.HandleFunc("/api/ai/models", s.handleAIModels)
 	mux.HandleFunc("/api/ai/chat", s.handleAIChat)
 	mux.HandleFunc("/api/ai/server-chat", s.handleServerChat)
@@ -147,6 +149,49 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]interface{}{"apps": result})
+}
+
+func (s *Server) handleAppInstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"error": "invalid request"})
+		return
+	}
+	app := apps.FindApp(req.Name)
+	if app == nil {
+		writeJSON(w, map[string]interface{}{"error": "app not found"})
+		return
+	}
+	if err := apps.InstallApp(app); err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"ok": true, "message": fmt.Sprintf("%s installed successfully", app.DisplayName)})
+}
+
+func (s *Server) handleAppRemove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"error": "invalid request"})
+		return
+	}
+	if err := apps.RemoveApp(req.Name); err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"ok": true, "message": fmt.Sprintf("%s removed successfully", req.Name)})
 }
 
 func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
