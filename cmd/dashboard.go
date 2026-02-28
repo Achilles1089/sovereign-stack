@@ -35,7 +35,7 @@ func runDashboard(cmd *cobra.Command, args []string) error {
 	cfgPath := config.ConfigPath(GetConfigPath())
 	cfg := config.LoadOrDefault(cfgPath)
 
-	addr := "localhost:" + dashboardPort
+	addr := "0.0.0.0:" + dashboardPort
 	srv := server.New(cfg, addr)
 
 	// Check if built dashboard exists
