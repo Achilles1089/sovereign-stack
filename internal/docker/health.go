@@ -10,20 +10,20 @@ import (
 
 // ServiceHealth represents the health of a Docker service
 type ServiceHealth struct {
-	Name    string
-	Running bool
-	Status  string
-	Uptime  string
-	Ports   string
-	Image   string
-	IsApp   bool
-	AppName string
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	Status  string `json:"status"`
+	Uptime  string `json:"uptime"`
+	Ports   string `json:"ports"`
+	Image   string `json:"image"`
+	IsApp   bool   `json:"is_app"`
+	AppName string `json:"app_name"`
 }
 
 // CheckAllServices returns the health of all sovereign-managed containers
 func CheckAllServices() ([]ServiceHealth, error) {
 	out, err := exec.Command("docker", "ps", "-a",
-		"--filter", "label=sovereign.managed=true",
+		"--filter", "name=sovereign-",
 		"--format", "{{.Names}}|{{.Status}}|{{.Ports}}|{{.Image}}|{{.Label \"sovereign.app\"}}",
 	).Output()
 	if err != nil {
