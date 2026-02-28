@@ -23,6 +23,14 @@ export default function AI() {
         api.getAIStatus().then(d => {
             setAiStatus(d);
             setActiveModel(d.model || '');
+            // Pre-warm: load model into RAM so first real chat is fast
+            if (d.model) {
+                fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: d.model, messages: [{ role: 'user', content: 'hi' }] }),
+                }).catch(() => { });
+            }
         }).catch(() => { });
         api.getResources().then(d => setResources(d)).catch(() => { });
     }, []);
@@ -43,7 +51,10 @@ export default function AI() {
         setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
         try {
-            await api.serverChat(input, activeModel, (chunk) => {
+            // Direct chat — no system prompt overhead for speed on low-power hardware
+            const chatMessages = messages.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
+            chatMessages.push({ role: 'user' as const, content: input });
+            await api.chat(activeModel, chatMessages, (chunk) => {
                 setMessages(prev => {
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
