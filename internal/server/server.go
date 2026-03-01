@@ -27,7 +27,7 @@ type Server struct {
 func New(cfg *config.Config, addr string) *Server {
 	host := cfg.AI.OllamaHost
 	if host == "" {
-		host = "localhost:11434"
+		host = "localhost:8085"
 	}
 	return &Server{
 		cfg:    cfg,
@@ -52,9 +52,13 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/apps/install", s.handleAppInstall)
 	mux.HandleFunc("/api/apps/remove", s.handleAppRemove)
 	mux.HandleFunc("/api/ai/models", s.handleAIModels)
+	mux.HandleFunc("/api/ai/catalog", s.handleAICatalog)
 	mux.HandleFunc("/api/ai/chat", s.handleAIChat)
 	mux.HandleFunc("/api/ai/server-chat", s.handleServerChat)
 	mux.HandleFunc("/api/ai/status", s.handleAIStatus)
+	mux.HandleFunc("/api/ai/pull", s.handleAIPull)
+	mux.HandleFunc("/api/ai/delete", s.handleAIDelete)
+	mux.HandleFunc("/api/ai/switch", s.handleAISwitch)
 
 	// Serve static dashboard files (SPA fallback)
 	if s.staticDir != "" {
@@ -70,8 +74,8 @@ func (s *Server) Start() error {
 		})
 	}
 
-	fmt.Printf("  🌐 Dashboard: http://%s\n", s.addr)
-	fmt.Printf("  📡 API:       http://%s/api/\n", s.addr)
+	fmt.Printf("  \U0001f310 Dashboard: http://%s\n", s.addr)
+	fmt.Printf("  \U0001f4e1 API:       http://%s/api/\n", s.addr)
 	return http.ListenAndServe(s.addr, corsMiddleware(mux))
 }
 
@@ -203,6 +207,29 @@ func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"models": models})
 }
 
+func (s *Server) handleAICatalog(w http.ResponseWriter, r *http.Request) {
+	// Return all available models from the catalog (not just installed)
+	installed, _ := s.client.ListModels()
+	installedMap := make(map[string]bool)
+	for _, m := range installed {
+		installedMap[m.Name] = true
+	}
+
+	type catalogEntry struct {
+		ai.ModelEntry
+		Installed bool `json:"installed"`
+	}
+
+	var catalog []catalogEntry
+	for _, m := range ai.ModelCatalog {
+		catalog = append(catalog, catalogEntry{
+			ModelEntry: m,
+			Installed:  installedMap[m.Name],
+		})
+	}
+	writeJSON(w, map[string]interface{}{"catalog": catalog})
+}
+
 func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
 	tier := hardware.GetGPUTier(&s.cfg.Hardware)
 	tierNames := map[hardware.GPUTier]string{
@@ -216,10 +243,12 @@ func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{
 		"running":     s.client.IsRunning(),
 		"host":        s.client.Host,
-		"mode":        s.cfg.AI.OllamaMode,
-		"model":       s.cfg.AI.DefaultModel,
+		"mode":        "native",
+		"model":       s.client.ActiveModel(),
 		"gpu_tier":    tierNames[tier],
 		"recommended": hardware.RecommendedModel(&s.cfg.Hardware),
+		"engine":      "llama-server",
+		"models_dir":  s.client.ModelsDir,
 	})
 }
 
@@ -304,6 +333,88 @@ func (s *Server) handleServerChat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) handleAIPull(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Stream progress back
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Transfer-Encoding", "chunked")
+	flusher, ok := w.(http.Flusher)
+
+	err := s.client.PullModel(req.Model, func(status string, completed, total int64) {
+		if total > 0 {
+			pct := float64(completed) / float64(total) * 100
+			fmt.Fprintf(w, "%s: %.0f%%\n", status, pct)
+		} else {
+			fmt.Fprintf(w, "%s\n", status)
+		}
+		if ok {
+			flusher.Flush()
+		}
+	})
+
+	if err != nil {
+		fmt.Fprintf(w, "ERROR: %s\n", err.Error())
+		return
+	}
+	fmt.Fprintf(w, "DONE\n")
+}
+
+func (s *Server) handleAIDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"error": "invalid request"})
+		return
+	}
+
+	err := s.client.DeleteModel(req.Model)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"ok": true, "message": fmt.Sprintf("%s deleted", req.Model)})
+}
+
+func (s *Server) handleAISwitch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, map[string]interface{}{"error": "invalid request"})
+		return
+	}
+
+	err := s.client.SwitchModel(req.Model)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"ok": true, "model": req.Model, "message": fmt.Sprintf("Switched to %s", req.Model)})
 }
 
 // spaHandler serves static files with SPA fallback to index.html

@@ -23,6 +23,12 @@ func TestModelCatalog(t *testing.T) {
 		if m.MinRAMMB < 0 {
 			t.Errorf("model %q has negative MinRAMMB", m.Name)
 		}
+		if m.Filename == "" {
+			t.Errorf("model %q has no filename", m.Name)
+		}
+		if m.URL == "" {
+			t.Errorf("model %q has no download URL", m.Name)
+		}
 
 		validTiers := map[string]bool{
 			"cpu": true, "basic": true, "mid": true,
@@ -49,19 +55,21 @@ func TestGetModelsForTier(t *testing.T) {
 
 	// Higher tiers should have more models
 	basicModels := GetModelsForTier("basic")
-	midModels := GetModelsForTier("mid")
-	if len(midModels) < len(basicModels) {
-		t.Error("mid tier should have at least as many models as basic")
+	if len(basicModels) < len(cpuModels) {
+		t.Error("basic tier should have at least as many models as cpu")
 	}
 }
 
 func TestGetModelByName(t *testing.T) {
-	m := GetModelByName("qwen2.5:7b")
+	m := GetModelByName("rwkv7-2.9B")
 	if m == nil {
-		t.Fatal("should find qwen2.5:7b")
+		t.Fatal("should find rwkv7-2.9B")
 	}
-	if m.Tier != "mid" {
-		t.Errorf("qwen2.5:7b should be mid tier, got %q", m.Tier)
+	if m.Tier != "cpu" {
+		t.Errorf("rwkv7-2.9B should be cpu tier, got %q", m.Tier)
+	}
+	if m.Architecture != "rwkv" {
+		t.Errorf("rwkv7-2.9B should have rwkv architecture, got %q", m.Architecture)
 	}
 
 	m = GetModelByName("nonexistent")
