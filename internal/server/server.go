@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Achilles1089/sovereign-stack/internal/ai"
@@ -76,8 +77,8 @@ func (s *Server) Start() error {
 		})
 	}
 
-	fmt.Printf("  \ud83c\udf10 Dashboard: http://%s\n", s.addr)
-	fmt.Printf("  \ud83d\udce1 API:       http://%s/api/\n", s.addr)
+	fmt.Printf("  [WEB] Dashboard: http://%s\n", s.addr)
+	fmt.Printf("  [API] API:       http://%s/api/\n", s.addr)
 	return http.ListenAndServe(s.addr, corsMiddleware(mux))
 }
 
@@ -114,15 +115,25 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
+	hw := &s.cfg.Hardware
+	// Live-detect hardware if config has no data (e.g., sovereign init was never run)
+	if hw.CPUCores == 0 || hw.RAMTotalMB == 0 {
+		detected, err := hardware.Detect()
+		if err == nil {
+			hw = detected
+			// Cache it in config so we don't re-detect every request
+			s.cfg.Hardware = *detected
+		}
+	}
 	writeJSON(w, map[string]interface{}{
-		"cpu_model":     s.cfg.Hardware.CPUModel,
-		"cpu_cores":     s.cfg.Hardware.CPUCores,
-		"ram_total_mb":  s.cfg.Hardware.RAMTotalMB,
-		"disk_total_gb": s.cfg.Hardware.DiskTotalGB,
-		"disk_free_gb":  s.cfg.Hardware.DiskFreeGB,
-		"gpu_type":      s.cfg.Hardware.GPUType,
-		"gpu_name":      s.cfg.Hardware.GPUName,
-		"gpu_memory_mb": s.cfg.Hardware.GPUMemoryMB,
+		"cpu_model":     hw.CPUModel,
+		"cpu_cores":     hw.CPUCores,
+		"ram_total_mb":  hw.RAMTotalMB,
+		"disk_total_gb": hw.DiskTotalGB,
+		"disk_free_gb":  hw.DiskFreeGB,
+		"gpu_type":      hw.GPUType,
+		"gpu_name":      hw.GPUName,
+		"gpu_memory_mb": hw.GPUMemoryMB,
 	})
 }
 
@@ -273,7 +284,7 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		req.Model = s.cfg.AI.DefaultModel
 	}
 
-	// Stream the response — anti-buffering headers are critical for Caddy/proxy
+	// Stream the response -- anti-buffering headers are critical for Caddy/proxy
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -322,7 +333,7 @@ func (s *Server) handleServerChat(w http.ResponseWriter, r *http.Request) {
 		{Role: "user", Content: req.Message},
 	}
 
-	// Stream the response — anti-buffering headers are critical for Caddy/proxy
+	// Stream the response -- anti-buffering headers are critical for Caddy/proxy
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -470,11 +481,7 @@ func (s *Server) handlePhoneStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := result.Data[0]
-	// Derive display name from model ID: "rwkv7-2.9B-world-q4_k_m.gguf" -> "RWKV-7 2.9B"
-	displayName := model.ID
-	if len(model.ID) > 5 && model.ID[:5] == "rwkv7" {
-		displayName = "RWKV-7 2.9B"
-	}
+	displayName := deriveModelDisplayName(model.ID)
 
 	writeJSON(w, map[string]interface{}{
 		"running":      true,
@@ -488,6 +495,41 @@ func (s *Server) handlePhoneStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// deriveModelDisplayName converts a GGUF filename/model ID into a readable display name
+// Examples: "rwkv7-0.4B-world-q8_0.gguf" -> "RWKV-7 0.4B"
+//           "qwen2.5-1.5b-instruct-q4_k_m.gguf" -> "Qwen 2.5 1.5B"
+//           "SmolLM2-360M-Instruct-f16.gguf" -> "SmolLM2 360M"
+func deriveModelDisplayName(modelID string) string {
+	id := strings.TrimSuffix(modelID, ".gguf")
+
+	// RWKV-7 pattern: rwkv7-{size}-world-{quant}
+	rwkvRe := regexp.MustCompile(`(?i)rwkv7[- ](\d+\.?\d*[BbMm])`)
+	if m := rwkvRe.FindStringSubmatch(id); len(m) > 1 {
+		return "RWKV-7 " + strings.ToUpper(m[1])
+	}
+
+	// Qwen pattern: qwen2.5-{size}-instruct-{quant}
+	qwenRe := regexp.MustCompile(`(?i)qwen(\d+\.?\d*)[- ](\d+\.?\d*[BbMm])`)
+	if m := qwenRe.FindStringSubmatch(id); len(m) > 2 {
+		return "Qwen " + m[1] + " " + strings.ToUpper(m[2])
+	}
+
+	// SmolLM pattern: SmolLM2-360M-...
+	smolRe := regexp.MustCompile(`(?i)(smollm\d*)[- ](\d+[BbMm])`)
+	if m := smolRe.FindStringSubmatch(id); len(m) > 2 {
+		return m[1] + " " + strings.ToUpper(m[2])
+	}
+
+	// Phi pattern: Phi-3-mini-...
+	phiRe := regexp.MustCompile(`(?i)(phi[- ]?\d+)[- ](mini|small|medium)`)
+	if m := phiRe.FindStringSubmatch(id); len(m) > 2 {
+		return m[1] + " " + strings.Title(m[2])
+	}
+
+	// Fallback: return raw ID cleaned up
+	return id
+}
+
 // spaHandler serves static files with SPA fallback to index.html
 func spaHandler(staticDir string) http.Handler {
 	fs := http.FileServer(http.Dir(staticDir))
@@ -495,7 +537,7 @@ func spaHandler(staticDir string) http.Handler {
 		path := filepath.Join(staticDir, r.URL.Path)
 		// Check if the file exists
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			// SPA fallback — serve index.html for non-API, non-file routes
+			// SPA fallback -- serve index.html for non-API, non-file routes
 			if !strings.HasPrefix(r.URL.Path, "/api/") {
 				http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
 				return

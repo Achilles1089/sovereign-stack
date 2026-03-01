@@ -8,7 +8,7 @@ interface Message {
 
 export default function AI() {
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'assistant', content: 'Hello! I\'m your sovereign AI. Ask me anything \u2014 all data stays on your hardware.' },
+        { role: 'assistant', content: 'Hello! I\'m your sovereign AI. Ask me anything -- all data stays on your hardware.' },
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -59,7 +59,7 @@ export default function AI() {
         return () => clearInterval(interval);
     }, []);
 
-    // Only scroll on send/complete \u2014 NOT on every token
+    // Only scroll on send/complete -- NOT on every token
     const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, []);
@@ -83,7 +83,7 @@ export default function AI() {
         try {
             const chatMessages = messages.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
             chatMessages.push({ role: 'user' as const, content: input });
-            // Limit context to last 10 messages \u2014 phone CPU prefill is slow on long history
+            // Limit context to last 10 messages -- phone CPU prefill is slow on long history
             const contextWindow = chatMessages.slice(-10);
             await api.chat(activeModel, contextWindow, (chunk) => {
                 // Buffer chunks and batch state updates via requestAnimationFrame
@@ -106,11 +106,11 @@ export default function AI() {
             }, controller.signal);
         } catch (e) {
             if ((e as Error).name === 'AbortError') {
-                // User stopped \u2014 keep whatever was generated so far
+                // User stopped -- keep whatever was generated so far
             } else {
                 setMessages(prev => {
                     const updated = [...prev];
-                    updated[updated.length - 1] = { role: 'assistant', content: '\u26a0\ufe0f Could not reach llama-server. Is it running?' };
+                    updated[updated.length - 1] = { role: 'assistant', content: '[!] Could not reach llama-server. Is it running?' };
                     return updated;
                 });
             }
@@ -148,11 +148,11 @@ export default function AI() {
                 setPullProgress(text.trim().split('\n').pop() || '');
             });
             setPullProgress('');
-            setStatusMsg(`\u2705 ${modelName} pulled!`);
+            setStatusMsg(`[OK] ${modelName} pulled!`);
             fetchModels();
             if (!activeModel) setActiveModel(modelName);
         } catch {
-            setStatusMsg(`\u26a0\ufe0f Failed to pull ${modelName}`);
+            setStatusMsg(`[!] Failed to pull ${modelName}`);
         }
         setPulling(null);
         setTimeout(() => setStatusMsg(''), 4000);
@@ -162,13 +162,13 @@ export default function AI() {
         if (!confirm(`Delete ${modelName}?`)) return;
         try {
             const res = await api.deleteModel(modelName);
-            if (res.error) { setStatusMsg(`\u26a0\ufe0f ${res.error}`); }
+            if (res.error) { setStatusMsg(`[!] ${res.error}`); }
             else {
-                setStatusMsg(`\u2705 ${modelName} deleted`);
+                setStatusMsg(`[OK] ${modelName} deleted`);
                 fetchModels();
                 if (activeModel === modelName) setActiveModel(models.find(m => m.name !== modelName)?.name || '');
             }
-        } catch { setStatusMsg('\u26a0\ufe0f Delete failed'); }
+        } catch { setStatusMsg('[!] Delete failed'); }
         setTimeout(() => setStatusMsg(''), 4000);
     };
 
@@ -191,7 +191,7 @@ export default function AI() {
 
     const archBadge = (arch: string) => {
         const colors: Record<string, string> = {
-            rwkv: '#10b981',    // green \u2014 flagship
+            rwkv: '#10b981',    // green -- flagship
             qwen2: '#3b82f6',   // blue
             llama: '#f59e0b',   // amber
             phi3: '#8b5cf6',    // purple
@@ -206,7 +206,7 @@ export default function AI() {
 
     return (
         <div className="ai-layout">
-            {/* LEFT PANEL \u2014 System + Services + AI Engine */}
+            {/* LEFT PANEL -- System + Services + AI Engine */}
             <aside className="ai-panel-left">
                 <div className="card compact">
                     <div className="card-title">System</div>
@@ -271,12 +271,12 @@ export default function AI() {
                     </div>
                 </div>
 
-                {/* AI Engine \u2014 Phone Status */}
+                {/* AI Engine -- Phone Status */}
                 <div className="card compact">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="card-title" style={{ marginBottom: 0 }}>\ud83d\udcf1 AI Engine</div>
+                        <div className="card-title" style={{ marginBottom: 0 }}>AI Engine</div>
                         <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                            {phoneStatus?.running ? '\ud83d\udfe2' : '\ud83d\udd34'}
+                            {phoneStatus?.running ? <span className="status-dot up" /> : <span className="status-dot down" />}
                         </span>
                     </div>
                     {phoneStatus?.running ? (
@@ -308,13 +308,13 @@ export default function AI() {
                 </div>
             </aside>
 
-            {/* CENTER \u2014 AI Chat */}
+            {/* CENTER -- AI Chat */}
             <div className="ai-panel-center">
                 {statusMsg && (
                     <div style={{
                         padding: '6px 12px', marginBottom: 12, borderRadius: 8, fontSize: 12,
-                        background: statusMsg.startsWith('\u2705') ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.12)',
-                        border: `1px solid ${statusMsg.startsWith('\u2705') ? 'rgba(34,197,94,0.25)' : 'rgba(234,179,8,0.25)'}`,
+                        background: statusMsg.startsWith('[OK]') ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.12)',
+                        border: `1px solid ${statusMsg.startsWith('[OK]') ? 'rgba(34,197,94,0.25)' : 'rgba(234,179,8,0.25)'}`,
                     }}>
                         {statusMsg}
                     </div>
@@ -325,7 +325,7 @@ export default function AI() {
                         <div className="card-title" style={{ marginBottom: 0 }}>AI Chat</div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <span className={`badge badge-sm ${aiStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                                {aiStatus?.running ? '\ud83d\udfe2 Online' : '\ud83d\udd34 Offline'}
+                                {aiStatus?.running ? <><span className="status-dot up" /> Online</> : <><span className="status-dot down" /> Offline</>}
                             </span>
                             {models.length > 0 && (
                                 <select
@@ -366,13 +366,13 @@ export default function AI() {
                         />
                         <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || !aiStatus?.running}>Send</button>
                         {isLoading && (
-                            <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>\u25a0 Stop</button>
+                            <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>Stop</button>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* RIGHT PANEL \u2014 Models */}
+            {/* RIGHT PANEL -- Models */}
             <aside className="ai-panel-right">
                 <div className="card compact">
                     <div className="card-title">Installed Models</div>
@@ -392,14 +392,14 @@ export default function AI() {
                                             onClick={() => setActiveModel(m.name)}
                                             style={{ fontSize: 10, padding: '2px 8px' }}
                                         >
-                                            {activeModel === m.name ? '\u25cf' : 'Use'}
+                                            {activeModel === m.name ? 'Active' : 'Use'}
                                         </button>
                                         <button
                                             className="btn btn-sm"
                                             onClick={() => handleDelete(m.name)}
                                             style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent-red)' }}
                                         >
-                                            \u2715
+                                            X
                                         </button>
                                     </div>
                                 </div>
@@ -425,11 +425,11 @@ export default function AI() {
                                             {m.architecture}
                                         </span>
                                     </div>
-                                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.description} \u00b7 {m.size_gb} GB</div>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.description} | {m.size_gb} GB</div>
                                 </div>
                                 <div>
                                     {m.installed ? (
-                                        <span style={{ fontSize: 10, color: 'var(--accent-green)' }}>\u2713</span>
+                                        <span style={{ fontSize: 10, color: 'var(--accent-green)' }}>OK</span>
                                     ) : (
                                         <button
                                             className="btn btn-sm btn-primary"
@@ -437,7 +437,7 @@ export default function AI() {
                                             disabled={!!pulling}
                                             style={{ fontSize: 10, padding: '2px 8px' }}
                                         >
-                                            {pulling === m.name ? '\u23f3' : 'Pull'}
+                                            {pulling === m.name ? '...' : 'Pull'}
                                         </button>
                                     )}
                                 </div>
@@ -449,7 +449,7 @@ export default function AI() {
                             marginTop: 8, padding: '4px 8px', background: 'var(--bg-secondary)',
                             borderRadius: 6, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)',
                         }}>
-                            \u23f3 {pullProgress || 'Connecting...'}
+                            Pulling: {pullProgress || 'Connecting...'}
                         </div>
                     )}
                 </div>
