@@ -131,160 +131,108 @@ var BuiltinApps = []AppManifest{
 		CaddyRoute: &CaddyRoute{Path: "/webui", Port: 3003},
 	},
 
-	// ── Phase 2 additions (18 apps) ──────────────────────────────────
-
-	// Smart Home
-	{
-		Name: "home-assistant", DisplayName: "Home Assistant", Description: "Open-source home automation platform",
+	// Phase 2 additions (18 apps)
+	{Name: "home-assistant", DisplayName: "Home Assistant", Description: "Open-source home automation platform",
 		Category: "smart-home", Version: "2024.12", Website: "https://home-assistant.io",
 		Requires:   AppRequirements{MinRAMMB: 1024, MinDiskGB: 5},
 		Compose:    AppCompose{Image: "ghcr.io/home-assistant/home-assistant:stable", Ports: []string{"8123:8123"}, Volumes: []string{"homeassistant_data:/config"}},
 		CaddyRoute: &CaddyRoute{Path: "/homeassistant", Port: 8123},
 	},
-
-	// Document Management
-	{
-		Name: "paperless-ngx", DisplayName: "Paperless-ngx", Description: "Document management with OCR",
+	{Name: "paperless-ngx", DisplayName: "Paperless-ngx", Description: "Document management with OCR",
 		Category: "productivity", Version: "2.14", Website: "https://docs.paperless-ngx.com",
 		Requires: AppRequirements{Services: []string{"postgres"}, MinRAMMB: 1024, MinDiskGB: 10},
 		Compose: AppCompose{Image: "ghcr.io/paperless-ngx/paperless-ngx:latest", Ports: []string{"8010:8000"}, Volumes: []string{"paperless_data:/usr/src/paperless/data", "paperless_media:/usr/src/paperless/media"},
 			Environment: []string{"PAPERLESS_DBHOST=sovereign-postgres", "PAPERLESS_DBUSER=sovereign", "PAPERLESS_DBPASS=sovereign", "PAPERLESS_DBNAME=paperless"}},
 		CaddyRoute: &CaddyRoute{Path: "/paperless", Port: 8010},
 	},
-
-	// Knowledge Base
-	{
-		Name: "bookstack", DisplayName: "BookStack", Description: "Self-hosted wiki and documentation",
+	{Name: "bookstack", DisplayName: "BookStack", Description: "Self-hosted wiki and documentation",
 		Category: "productivity", Version: "24.12", Website: "https://bookstackapp.com",
 		Requires: AppRequirements{Services: []string{"postgres"}, MinRAMMB: 256},
 		Compose: AppCompose{Image: "lscr.io/linuxserver/bookstack:latest", Ports: []string{"6875:80"}, Volumes: []string{"bookstack_data:/config"},
 			Environment: []string{"DB_HOST=sovereign-postgres", "DB_USER=sovereign", "DB_PASS=sovereign", "DB_DATABASE=bookstack"}},
 		CaddyRoute: &CaddyRoute{Path: "/bookstack", Port: 6875},
 	},
-
-	// Monitoring
-	{
-		Name: "grafana", DisplayName: "Grafana", Description: "Metrics visualization and dashboards",
+	{Name: "grafana", DisplayName: "Grafana", Description: "Metrics visualization and dashboards",
 		Category: "monitoring", Version: "11.4", Website: "https://grafana.com",
 		Compose:    AppCompose{Image: "grafana/grafana-oss:latest", Ports: []string{"3004:3000"}, Volumes: []string{"grafana_data:/var/lib/grafana"}},
 		CaddyRoute: &CaddyRoute{Path: "/grafana", Port: 3004},
 	},
-	{
-		Name: "prometheus", DisplayName: "Prometheus", Description: "Time-series monitoring and alerting",
+	{Name: "prometheus", DisplayName: "Prometheus", Description: "Time-series monitoring and alerting",
 		Category: "monitoring", Version: "2.55", Website: "https://prometheus.io",
 		Compose:    AppCompose{Image: "prom/prometheus:latest", Ports: []string{"9090:9090"}, Volumes: []string{"prometheus_data:/prometheus"}},
 		CaddyRoute: &CaddyRoute{Path: "/prometheus", Port: 9090},
 	},
-
-	// Wiki
-	{
-		Name: "wikijs", DisplayName: "Wiki.js", Description: "Modern, powerful wiki engine",
+	{Name: "wikijs", DisplayName: "Wiki.js", Description: "Modern, powerful wiki engine",
 		Category: "productivity", Version: "2.5", Website: "https://js.wiki",
 		Requires: AppRequirements{Services: []string{"postgres"}, MinRAMMB: 512},
 		Compose: AppCompose{Image: "ghcr.io/requarks/wiki:2", Ports: []string{"3005:3000"}, Volumes: []string{"wikijs_data:/wiki/data"},
 			Environment: []string{"DB_TYPE=postgres", "DB_HOST=sovereign-postgres", "DB_PORT=5432", "DB_USER=sovereign", "DB_PASS=sovereign", "DB_NAME=wikijs"}},
 		CaddyRoute: &CaddyRoute{Path: "/wiki", Port: 3005},
 	},
-
-	// Analytics
-	{
-		Name: "plausible", DisplayName: "Plausible", Description: "Privacy-friendly web analytics",
+	{Name: "plausible", DisplayName: "Plausible", Description: "Privacy-friendly web analytics",
 		Category: "analytics", Version: "2.1", Website: "https://plausible.io",
 		Requires: AppRequirements{Services: []string{"postgres"}, MinRAMMB: 512},
 		Compose: AppCompose{Image: "ghcr.io/plausible/community-edition:v2.1", Ports: []string{"8011:8000"}, Volumes: []string{"plausible_data:/var/lib/plausible"},
 			Environment: []string{"DATABASE_URL=postgres://sovereign:sovereign@sovereign-postgres:5432/plausible", "BASE_URL=http://localhost:8011", "SECRET_KEY_BASE=sovereign-secret-key-change-in-production"}},
 		CaddyRoute: &CaddyRoute{Path: "/plausible", Port: 8011},
 	},
-
-	// Recipes
-	{
-		Name: "mealie", DisplayName: "Mealie", Description: "Recipe management and meal planning",
+	{Name: "mealie", DisplayName: "Mealie", Description: "Recipe management and meal planning",
 		Category: "lifestyle", Version: "2.4", Website: "https://mealie.io",
 		Compose: AppCompose{Image: "ghcr.io/mealie-recipes/mealie:latest", Ports: []string{"9925:9000"}, Volumes: []string{"mealie_data:/app/data"},
 			Environment: []string{"ALLOW_SIGNUP=false", "TZ=UTC"}},
 		CaddyRoute: &CaddyRoute{Path: "/mealie", Port: 9925},
 	},
-
-	// Finance
-	{
-		Name: "firefly", DisplayName: "Firefly III", Description: "Personal finance manager",
+	{Name: "firefly", DisplayName: "Firefly III", Description: "Personal finance manager",
 		Category: "finance", Version: "6.1", Website: "https://firefly-iii.org",
 		Requires: AppRequirements{Services: []string{"postgres"}, MinRAMMB: 512},
 		Compose: AppCompose{Image: "fireflyiii/core:latest", Ports: []string{"8012:8080"}, Volumes: []string{"firefly_data:/var/www/html/storage/upload"},
 			Environment: []string{"DB_HOST=sovereign-postgres", "DB_PORT=5432", "DB_CONNECTION=pgsql", "DB_DATABASE=firefly", "DB_USERNAME=sovereign", "DB_PASSWORD=sovereign", "APP_KEY=sovereign-change-this-32-char-key!!"}},
 		CaddyRoute: &CaddyRoute{Path: "/firefly", Port: 8012},
 	},
-
-	// Photos
-	{
-		Name: "photoprism", DisplayName: "PhotoPrism", Description: "AI-powered photo management",
+	{Name: "photoprism", DisplayName: "PhotoPrism", Description: "AI-powered photo management",
 		Category: "media", Version: "240915", Website: "https://photoprism.app",
 		Requires: AppRequirements{MinRAMMB: 2048, MinDiskGB: 20},
 		Compose: AppCompose{Image: "photoprism/photoprism:latest", Ports: []string{"2342:2342"}, Volumes: []string{"photoprism_originals:/photoprism/originals", "photoprism_storage:/photoprism/storage"},
 			Environment: []string{"PHOTOPRISM_ADMIN_PASSWORD=sovereign", "PHOTOPRISM_SITE_URL=http://localhost:2342/"}},
 		CaddyRoute: &CaddyRoute{Path: "/photoprism", Port: 2342},
 	},
-
-	// Audiobooks
-	{
-		Name: "audiobookshelf", DisplayName: "Audiobookshelf", Description: "Self-hosted audiobook and podcast server",
+	{Name: "audiobookshelf", DisplayName: "Audiobookshelf", Description: "Self-hosted audiobook and podcast server",
 		Category: "media", Version: "2.17", Website: "https://www.audiobookshelf.org",
 		Compose:    AppCompose{Image: "ghcr.io/advplyr/audiobookshelf:latest", Ports: []string{"13378:80"}, Volumes: []string{"audiobookshelf_data:/config", "audiobookshelf_meta:/metadata"}},
 		CaddyRoute: &CaddyRoute{Path: "/audiobookshelf", Port: 13378},
 	},
-
-	// Comics / Manga
-	{
-		Name: "kavita", DisplayName: "Kavita", Description: "Digital library for comics, manga, and books",
+	{Name: "kavita", DisplayName: "Kavita", Description: "Digital library for comics, manga, and books",
 		Category: "media", Version: "0.8", Website: "https://kavitareader.com",
 		Compose:    AppCompose{Image: "jvmilazz0/kavita:latest", Ports: []string{"5000:5000"}, Volumes: []string{"kavita_data:/kavita/config"}},
 		CaddyRoute: &CaddyRoute{Path: "/kavita", Port: 5000},
 	},
-
-	// Music
-	{
-		Name: "navidrome", DisplayName: "Navidrome", Description: "Modern music server and streamer",
+	{Name: "navidrome", DisplayName: "Navidrome", Description: "Modern music server and streamer",
 		Category: "media", Version: "0.53", Website: "https://navidrome.org",
 		Compose:    AppCompose{Image: "deluan/navidrome:latest", Ports: []string{"4533:4533"}, Volumes: []string{"navidrome_data:/data", "navidrome_music:/music:ro"}},
 		CaddyRoute: &CaddyRoute{Path: "/navidrome", Port: 4533},
 	},
-
-	// Object Storage
-	{
-		Name: "minio", DisplayName: "MinIO", Description: "S3-compatible object storage",
+	{Name: "minio", DisplayName: "MinIO", Description: "S3-compatible object storage",
 		Category: "system", Version: "2024", Website: "https://min.io",
 		Compose: AppCompose{Image: "minio/minio:latest", Ports: []string{"9100:9000", "9101:9001"}, Volumes: []string{"minio_data:/data"},
 			Environment: []string{"MINIO_ROOT_USER=sovereign", "MINIO_ROOT_PASSWORD=sovereign123"}},
 		CaddyRoute: &CaddyRoute{Path: "/minio", Port: 9101},
 	},
-
-	// Change Detection
-	{
-		Name: "changedetection", DisplayName: "Changedetection.io", Description: "Website change monitoring",
+	{Name: "changedetection", DisplayName: "Changedetection.io", Description: "Website change monitoring",
 		Category: "monitoring", Version: "0.46", Website: "https://changedetection.io",
 		Compose:    AppCompose{Image: "ghcr.io/dgtlmoon/changedetection.io:latest", Ports: []string{"5555:5000"}, Volumes: []string{"changedetection_data:/datastore"}},
 		CaddyRoute: &CaddyRoute{Path: "/changedetection", Port: 5555},
 	},
-
-	// IT Tools
-	{
-		Name: "it-tools", DisplayName: "IT-Tools", Description: "Collection of developer tools (JSON, Base64, hashing, etc.)",
+	{Name: "it-tools", DisplayName: "IT-Tools", Description: "Collection of developer tools (JSON, Base64, hashing, etc.)",
 		Category: "development", Version: "2024.10",
 		Compose:    AppCompose{Image: "corentinth/it-tools:latest", Ports: []string{"8013:80"}},
 		CaddyRoute: &CaddyRoute{Path: "/it-tools", Port: 8013},
 	},
-
-	// Speed Test
-	{
-		Name: "speedtest-tracker", DisplayName: "Speedtest Tracker", Description: "Internet speed monitoring over time",
+	{Name: "speedtest-tracker", DisplayName: "Speedtest Tracker", Description: "Internet speed monitoring over time",
 		Category: "monitoring", Version: "0.20",
 		Compose:    AppCompose{Image: "lscr.io/linuxserver/speedtest-tracker:latest", Ports: []string{"8765:80"}, Volumes: []string{"speedtest_data:/config"}},
 		CaddyRoute: &CaddyRoute{Path: "/speedtest", Port: 8765},
 	},
-
-	// Dashboard
-	{
-		Name: "homarr", DisplayName: "Homarr", Description: "Sleek server dashboard and app organizer",
+	{Name: "homarr", DisplayName: "Homarr", Description: "Sleek server dashboard and app organizer",
 		Category: "system", Version: "0.15", Website: "https://homarr.dev",
 		Compose:    AppCompose{Image: "ghcr.io/ajnart/homarr:latest", Ports: []string{"7575:7575"}, Volumes: []string{"homarr_data:/app/data/configs", "/var/run/docker.sock:/var/run/docker.sock:ro"}},
 		CaddyRoute: &CaddyRoute{Path: "/homarr", Port: 7575},
