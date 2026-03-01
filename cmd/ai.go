@@ -35,7 +35,7 @@ var aiPullCmd = &cobra.Command{
 var aiChatCmd = &cobra.Command{
 	Use:   "chat",
 	Short: "Chat with your local AI",
-	Long:  `Start an interactive chat session with your local AI model via Ollama.`,
+	Long:  `Start an interactive chat session with your local AI model via llama-server.`,
 	RunE:  runAIChat,
 }
 
@@ -60,12 +60,12 @@ func init() {
 	rootCmd.AddCommand(aiCmd)
 }
 
-func getOllamaClient() *aiPkg.Client {
+func getLlamaClient() *aiPkg.Client {
 	cfgPath := config.ConfigPath(GetConfigPath())
 	cfg := config.LoadOrDefault(cfgPath)
-	host := cfg.AI.OllamaHost
+	host := cfg.AI.Host
 	if host == "" {
-		host = "localhost:11434"
+		host = "localhost:8085"
 	}
 	return aiPkg.NewClient(host)
 }
@@ -89,12 +89,12 @@ func runAIStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Default Model: %s\n", cfg.AI.DefaultModel)
 	fmt.Println()
 
-	client := getOllamaClient()
-	fmt.Printf("  Ollama Host:   %s\n", client.Host)
-	fmt.Printf("  Ollama Mode:   %s\n", cfg.AI.OllamaMode)
+	client := getLlamaClient()
+	fmt.Printf("  Server Host:   %s\n", client.Host)
+	fmt.Printf("  Engine:        llama-server\n")
 
 	if client.IsRunning() {
-		fmt.Println("  Ollama Status: 🟢 Running")
+		fmt.Println("  llama-server:  🟢 Running")
 
 		models, err := client.ListModels()
 		if err == nil {
@@ -105,13 +105,9 @@ func runAIStatus(cmd *cobra.Command, args []string) error {
 			}
 		}
 	} else {
-		fmt.Println("  Ollama Status: 🔴 Not reachable")
+		fmt.Println("  llama-server:  🔴 Not reachable")
 		fmt.Println()
-		if cfg.AI.OllamaMode == "native" {
-			fmt.Println("  Start Ollama with: ollama serve")
-		} else {
-			fmt.Println("  Start with: docker compose -f ~/.sovereign/docker-compose.yml up -d ollama")
-		}
+		fmt.Println("  Start with: llama-server -m <model.gguf> --host 0.0.0.0 --port 8085")
 	}
 
 	fmt.Println()
@@ -120,7 +116,7 @@ func runAIStatus(cmd *cobra.Command, args []string) error {
 
 func runAIPull(cmd *cobra.Command, args []string) error {
 	model := args[0]
-	client := getOllamaClient()
+	client := getLlamaClient()
 
 	fmt.Printf("\n  Pulling model: %s\n", model)
 	fmt.Printf("  From: %s\n\n", client.Host)
@@ -145,14 +141,14 @@ func runAIPull(cmd *cobra.Command, args []string) error {
 func runAIChat(cmd *cobra.Command, args []string) error {
 	cfgPath := config.ConfigPath(GetConfigPath())
 	cfg := config.LoadOrDefault(cfgPath)
-	client := getOllamaClient()
+	client := getLlamaClient()
 	model := cfg.AI.DefaultModel
 	if model == "" {
-		model = "qwen2.5:0.5b"
+		model = "rwkv7-2.9B"
 	}
 
 	if !client.IsRunning() {
-		return fmt.Errorf("Ollama is not running. Start it first, then try again")
+		return fmt.Errorf("llama-server is not running. Start it first, then try again")
 	}
 
 	fmt.Println()
@@ -205,7 +201,7 @@ func runAIChat(cmd *cobra.Command, args []string) error {
 }
 
 func runAIModels(cmd *cobra.Command, args []string) error {
-	client := getOllamaClient()
+	client := getLlamaClient()
 
 	models, err := client.ListModels()
 	if err != nil {
@@ -220,7 +216,7 @@ func runAIModels(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  • %-30s  %.1f GB\n", m.Name, sizeGB)
 	}
 	if len(models) == 0 {
-		fmt.Println("  No models installed. Pull one with: sovereign ai pull qwen2.5:0.5b")
+		fmt.Println("  No models installed. Pull one with: sovereign ai pull rwkv7-2.9B")
 	}
 	fmt.Println()
 	return nil

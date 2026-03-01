@@ -121,11 +121,6 @@ func (i *Info) SupportsGPUPassthrough() bool {
 	return i.Platform == PlatformLinux // Only native Linux supports Docker GPU passthrough
 }
 
-// NeedsNativeOllama returns true if Ollama should be installed natively (not containerized)
-func (i *Info) NeedsNativeOllama() bool {
-	return i.Platform == PlatformMacOS // macOS needs native Ollama for Metal GPU
-}
-
 // NeedsDockerDesktop returns true if Docker Desktop is required (vs Docker Engine)
 func (i *Info) NeedsDockerDesktop() bool {
 	return i.Platform == PlatformMacOS || i.Platform == PlatformWindows

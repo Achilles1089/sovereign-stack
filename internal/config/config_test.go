@@ -87,8 +87,8 @@ func TestConfigDir(t *testing.T) {
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if !cfg.Services.Ollama {
-		t.Error("Ollama should be enabled by default")
+	if !cfg.Services.LlamaServer {
+		t.Error("LlamaServer should be enabled by default")
 	}
 	if !cfg.Services.Postgres {
 		t.Error("Postgres should be enabled by default")

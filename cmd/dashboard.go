@@ -20,9 +20,11 @@ services, apps, AI models, and backups.`,
 }
 
 var dashboardPort string
+var dashboardStaticDir string
 
 func init() {
 	dashboardCmd.Flags().StringVarP(&dashboardPort, "port", "p", "8080", "Port to serve dashboard on")
+	dashboardCmd.Flags().StringVarP(&dashboardStaticDir, "static-dir", "s", "", "Path to built dashboard frontend (default: ~/.sovereign/dashboard)")
 	rootCmd.AddCommand(dashboardCmd)
 }
 
@@ -38,8 +40,11 @@ func runDashboard(cmd *cobra.Command, args []string) error {
 	addr := "0.0.0.0:" + dashboardPort
 	srv := server.New(cfg, addr)
 
-	// Check if built dashboard exists
-	staticDir := config.ConfigDir() + "/dashboard"
+	// Use --static-dir flag if provided, otherwise use config directory
+	staticDir := dashboardStaticDir
+	if staticDir == "" {
+		staticDir = config.ConfigDir() + "/dashboard"
+	}
 	srv.SetStaticDir(staticDir)
 
 	fmt.Printf("  🌐 Dashboard: http://%s\n", addr)

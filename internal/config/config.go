@@ -33,18 +33,19 @@ type Config struct {
 
 // ServicesConfig tracks which core services are enabled
 type ServicesConfig struct {
-	Ollama   bool `yaml:"ollama"`
-	Postgres bool `yaml:"postgres"`
-	Caddy    bool `yaml:"caddy"`
-	MinIO    bool `yaml:"minio"`
+	LlamaServer bool `yaml:"llama_server"`
+	Postgres    bool `yaml:"postgres"`
+	Caddy       bool `yaml:"caddy"`
+	MinIO       bool `yaml:"minio"`
 }
 
 // AIConfig holds AI inference settings
 type AIConfig struct {
 	Enabled      bool   `yaml:"enabled"`
-	DefaultModel string `yaml:"default_model"` // e.g., "qwen2.5:7b"
-	OllamaHost   string `yaml:"ollama_host"`   // "localhost:11434" or container address
-	OllamaMode   string `yaml:"ollama_mode"`   // "container" (Linux) or "native" (macOS)
+	DefaultModel string `yaml:"default_model"` // e.g., "rwkv7-2.9B"
+	Host         string `yaml:"host"`          // "localhost:8085" — llama-server address
+	PhoneHost    string `yaml:"phone_host"`    // "localhost:8085" via ADB forward
+	ModelsDir    string `yaml:"models_dir"`    // local GGUF models directory
 }
 
 // BackupConfig holds backup settings
@@ -74,14 +75,14 @@ func DefaultConfig() *Config {
 	return &Config{
 		Port: 8080,
 		Services: ServicesConfig{
-			Ollama:   true,
-			Postgres: true,
-			Caddy:    true,
-			MinIO:    false,
+			LlamaServer: true,
+			Postgres:    true,
+			Caddy:       true,
+			MinIO:       false,
 		},
 		AI: AIConfig{
-			Enabled:    true,
-			OllamaHost: "localhost:11434",
+			Enabled: true,
+			Host:    "localhost:8085",
 		},
 		Backup: BackupConfig{
 			Enabled:  true,

@@ -81,7 +81,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if cfg.AI.Enabled {
 		fmt.Println()
 		fmt.Println("  AI:")
-		fmt.Printf("    Model: %s  |  Mode: %s  |  Host: %s\n", cfg.AI.DefaultModel, cfg.AI.OllamaMode, cfg.AI.OllamaHost)
+		fmt.Printf("    Model: %s  |  Engine: llama-server  |  Host: %s\n", cfg.AI.DefaultModel, cfg.AI.Host)
 	}
 
 	fmt.Println()

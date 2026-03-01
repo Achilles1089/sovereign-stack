@@ -102,8 +102,8 @@ func BuildServerContext(cfg *config.Config) *ServerContext {
 	// AI
 	ctx.AI = AIStatus{
 		Model:       cfg.AI.DefaultModel,
-		Host:        cfg.AI.OllamaHost,
-		Mode:        cfg.AI.OllamaMode,
+		Host:        cfg.AI.Host,
+		Mode:        "native",
 		Recommended: hardware.RecommendedModel(&cfg.Hardware),
 	}
 

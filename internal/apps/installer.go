@@ -127,7 +127,7 @@ var BuiltinApps = []AppManifest{
 		Name: "open-webui", DisplayName: "Open WebUI", Description: "ChatGPT-style interface for local AI",
 		Category: "ai", Version: "0.5",
 		Compose: AppCompose{Image: "ghcr.io/open-webui/open-webui:main", Ports: []string{"3003:8080"}, Volumes: []string{"openwebui_data:/app/backend/data"},
-			Environment: []string{"OLLAMA_BASE_URL=http://sovereign-ollama:11434"}},
+			Environment: []string{"LLAMA_SERVER_URL=http://localhost:8085"}},
 		CaddyRoute: &CaddyRoute{Path: "/webui", Port: 3003},
 	},
 

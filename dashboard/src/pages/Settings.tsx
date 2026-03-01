@@ -54,11 +54,11 @@ export default function Settings() {
                             <span className="mono">{aiStatus?.recommended || '—'}</span>
                         </div>
                         <div>
-                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Ollama Mode</label>
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Engine</label>
                             <span className="mono">{aiStatus?.mode || '—'}</span>
                         </div>
                         <div>
-                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Ollama Host</label>
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Server Host</label>
                             <span className="mono">{aiStatus?.host || '—'}</span>
                         </div>
                         <div>

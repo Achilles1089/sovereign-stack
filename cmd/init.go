@@ -22,9 +22,9 @@ Detects your hardware, installs Docker and AI inference,
 and spins up your personal cloud — all in one command.
 
 Behavior varies by platform:
-  Linux:  Full server mode — Docker Engine + containerized Ollama
-  macOS:  Personal mode — Docker Desktop + native Ollama (Metal GPU)
-  WSL2:   WSL2 mode — Docker Desktop + containerized Ollama`,
+  Linux:  Full server mode — Docker Engine + llama-server
+  macOS:  Personal mode — Docker Desktop + llama-server (Metal GPU)
+  WSL2:   WSL2 mode — Docker Desktop + llama-server`,
 	RunE: runInit,
 }
 
@@ -76,13 +76,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg.Hardware = *hw
 	cfg.AI.DefaultModel = model
 
-	if pinfo.NeedsNativeOllama() {
-		cfg.AI.OllamaMode = "native"
-		cfg.AI.OllamaHost = "localhost:11434"
-	} else {
-		cfg.AI.OllamaMode = "container"
-		cfg.AI.OllamaHost = "localhost:11434"
-	}
+	// llama-server runs natively on all platforms
+	cfg.AI.Host = "localhost:8085"
 
 	if pinfo.Mode == platform.ModeServer {
 		cfg.Domain = "localhost"
@@ -171,7 +166,7 @@ func printSummary(cfg *config.Config, pinfo *platform.Info) {
 	fmt.Println("  ├─────────────────────────────────────────────┤")
 	fmt.Printf("  │  Platform:  %-31s │\n", pinfo)
 	fmt.Printf("  │  AI Model:  %-31s │\n", cfg.AI.DefaultModel)
-	fmt.Printf("  │  Ollama:    %-31s │\n", cfg.AI.OllamaMode)
+	fmt.Printf("  │  Engine:    %-31s │\n", "llama-server")
 	fmt.Printf("  │  Config:    %-31s │\n", "~/.sovereign/config.yaml")
 	fmt.Println("  ├─────────────────────────────────────────────┤")
 	fmt.Println("  │  Next steps:                                │")

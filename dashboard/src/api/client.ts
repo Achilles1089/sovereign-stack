@@ -41,6 +41,32 @@ export interface AIStatus {
     model: string;
     gpu_tier: string;
     recommended: string;
+    engine: string;
+    models_dir: string;
+}
+
+export interface CatalogEntry {
+    name: string;
+    display_name: string;
+    filename: string;
+    size_gb: number;
+    min_ram_mb: number;
+    tier: string;
+    architecture: string;
+    description: string;
+    url: string;
+    installed: boolean;
+}
+
+export interface PhoneStatus {
+    model: string;
+    display_name: string;
+    params: number;
+    vocab: number;
+    context: number;
+    size_bytes: number;
+    engine: string;
+    running: boolean;
 }
 
 export interface ChatMessage {
@@ -60,6 +86,8 @@ export const api = {
     getApps: () => fetchJSON<{ apps: AppInfo[] }>('/apps'),
     getAIStatus: () => fetchJSON<AIStatus>('/ai/status'),
     getModels: () => fetchJSON<{ models: AIModel[] }>('/ai/models'),
+    getCatalog: () => fetchJSON<{ catalog: CatalogEntry[] }>('/ai/catalog'),
+    getPhoneStatus: () => fetchJSON<PhoneStatus>('/ai/phone-status'),
 
     installApp: (name: string) => fetch(API_BASE + '/apps/install', {
         method: 'POST',
@@ -85,24 +113,53 @@ export const api = {
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            onChunk(decoder.decode(value));
+            onChunk(decoder.decode(value, { stream: true }));
         }
     },
 
-    chat: async (model: string, messages: ChatMessage[], onChunk: (text: string) => void) => {
+    chat: async (model: string, messages: ChatMessage[], onChunk: (text: string) => void, signal?: AbortSignal) => {
         const res = await fetch(API_BASE + '/ai/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model, messages }),
+            signal,
         });
         if (!res.ok) throw new Error(`Chat error: ${res.status}`);
+        const reader = res.body?.getReader();
+        if (!reader) return;
+        const decoder = new TextDecoder();
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                onChunk(decoder.decode(value, { stream: true }));
+            }
+        } catch (e) {
+            reader.cancel();
+            throw e;
+        }
+    },
+
+    pullModel: async (model: string, onProgress: (text: string) => void) => {
+        const res = await fetch(API_BASE + '/ai/pull', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model }),
+        });
+        if (!res.ok) throw new Error(`Pull error: ${res.status}`);
         const reader = res.body?.getReader();
         if (!reader) return;
         const decoder = new TextDecoder();
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            onChunk(decoder.decode(value));
+            onProgress(decoder.decode(value));
         }
     },
+
+    deleteModel: (model: string) => fetch(API_BASE + '/ai/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
+    }).then(r => r.json()),
 };

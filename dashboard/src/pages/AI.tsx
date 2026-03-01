@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { api, type AIModel, type AIStatus, type SystemResources } from '../api/client';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { api, type AIModel, type AIStatus, type SystemResources, type ServiceStatus, type CatalogEntry, type PhoneStatus } from '../api/client';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -8,73 +8,168 @@ interface Message {
 
 export default function AI() {
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'assistant', content: 'Hello! I\'m your local AI running on Sovereign Stack. Ask me anything about your server.' },
+        { role: 'assistant', content: 'Hello! I\'m your sovereign AI. Ask me anything — all data stays on your hardware.' },
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [models, setModels] = useState<AIModel[]>([]);
     const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
     const [resources, setResources] = useState<SystemResources | null>(null);
+    const [services, setServices] = useState<ServiceStatus[]>([]);
     const [activeModel, setActiveModel] = useState('');
+    const [pulling, setPulling] = useState<string | null>(null);
+    const [pullProgress, setPullProgress] = useState('');
+    const [statusMsg, setStatusMsg] = useState('');
+    const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+    const [phoneStatus, setPhoneStatus] = useState<PhoneStatus | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const abortRef = useRef<AbortController | null>(null);
+
+    // Speed optimization: buffer chunks with requestAnimationFrame
+    const chunkBufferRef = useRef('');
+    const rafRef = useRef<number | null>(null);
+
+    const fetchModels = () => {
+        api.getModels().then(d => setModels(d.models || [])).catch(() => { });
+    };
+
+    const fetchSystem = () => {
+        api.getResources().then(d => setResources(d)).catch(() => { });
+        api.getStatus().then(d => setServices(d.services || [])).catch(() => { });
+    };
+
+    const fetchPhoneStatus = () => {
+        api.getPhoneStatus().then(d => setPhoneStatus(d)).catch(() => setPhoneStatus(null));
+    };
 
     useEffect(() => {
-        api.getModels().then(d => setModels(d.models || [])).catch(() => { });
+        fetchModels();
+        fetchSystem();
+        fetchPhoneStatus();
         api.getAIStatus().then(d => {
             setAiStatus(d);
             setActiveModel(d.model || '');
-            // Pre-warm: load model into RAM so first real chat is fast
-            if (d.model) {
-                fetch('/api/ai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: d.model, messages: [{ role: 'user', content: 'hi' }] }),
-                }).catch(() => { });
-            }
         }).catch(() => { });
-        api.getResources().then(d => setResources(d)).catch(() => { });
+        api.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => { });
+
+        const interval = setInterval(() => {
+            fetchSystem();
+            fetchPhoneStatus();
+        }, 15000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Only scroll on send/complete — NOT on every token
+    const scrollToBottom = useCallback(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, []);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        scrollToBottom();
+    }, [isLoading, scrollToBottom]);
 
     const handleSend = async () => {
         if (!input.trim() || isLoading) return;
-
         const userMsg: Message = { role: 'user', content: input };
         setMessages(prev => [...prev, userMsg]);
         setInput('');
         setIsLoading(true);
-
-        // Add empty assistant message that we'll stream into
         setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+        scrollToBottom();
+
+        const controller = new AbortController();
+        abortRef.current = controller;
 
         try {
-            // Direct chat — no system prompt overhead for speed on low-power hardware
             const chatMessages = messages.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
             chatMessages.push({ role: 'user' as const, content: input });
-            await api.chat(activeModel, chatMessages, (chunk) => {
+            // Limit context to last 10 messages — phone CPU prefill is slow on long history
+            const contextWindow = chatMessages.slice(-10);
+            await api.chat(activeModel, contextWindow, (chunk) => {
+                // Buffer chunks and batch state updates via requestAnimationFrame
+                chunkBufferRef.current += chunk;
+                if (!rafRef.current) {
+                    rafRef.current = requestAnimationFrame(() => {
+                        const buffered = chunkBufferRef.current;
+                        chunkBufferRef.current = '';
+                        rafRef.current = null;
+                        setMessages(prev => {
+                            const updated = [...prev];
+                            const last = updated[updated.length - 1];
+                            if (last.role === 'assistant') {
+                                updated[updated.length - 1] = { ...last, content: last.content + buffered };
+                            }
+                            return updated;
+                        });
+                    });
+                }
+            }, controller.signal);
+        } catch (e) {
+            if ((e as Error).name === 'AbortError') {
+                // User stopped — keep whatever was generated so far
+            } else {
                 setMessages(prev => {
                     const updated = [...prev];
-                    const last = updated[updated.length - 1];
-                    if (last.role === 'assistant') {
-                        updated[updated.length - 1] = { ...last, content: last.content + chunk };
-                    }
+                    updated[updated.length - 1] = { role: 'assistant', content: '⚠️ Could not reach llama-server. Is it running?' };
                     return updated;
                 });
-            });
-        } catch {
+            }
+        }
+        // Flush any remaining buffered content
+        if (chunkBufferRef.current) {
+            const remaining = chunkBufferRef.current;
+            chunkBufferRef.current = '';
             setMessages(prev => {
                 const updated = [...prev];
-                updated[updated.length - 1] = {
-                    role: 'assistant',
-                    content: '⚠️ Could not reach Ollama. Make sure the container is running: `sudo docker compose -f /root/.sovereign/docker-compose.yml up -d`',
-                };
+                const last = updated[updated.length - 1];
+                if (last.role === 'assistant') {
+                    updated[updated.length - 1] = { ...last, content: last.content + remaining };
+                }
                 return updated;
             });
         }
+        if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+        }
+        abortRef.current = null;
         setIsLoading(false);
+    };
+
+    const handleStop = () => {
+        abortRef.current?.abort();
+    };
+
+    const handlePull = async (modelName: string) => {
+        setPulling(modelName);
+        setPullProgress('Starting download...');
+        try {
+            await api.pullModel(modelName, (text) => {
+                setPullProgress(text.trim().split('\n').pop() || '');
+            });
+            setPullProgress('');
+            setStatusMsg(`✅ ${modelName} pulled!`);
+            fetchModels();
+            if (!activeModel) setActiveModel(modelName);
+        } catch {
+            setStatusMsg(`⚠️ Failed to pull ${modelName}`);
+        }
+        setPulling(null);
+        setTimeout(() => setStatusMsg(''), 4000);
+    };
+
+    const handleDelete = async (modelName: string) => {
+        if (!confirm(`Delete ${modelName}?`)) return;
+        try {
+            const res = await api.deleteModel(modelName);
+            if (res.error) { setStatusMsg(`⚠️ ${res.error}`); }
+            else {
+                setStatusMsg(`✅ ${modelName} deleted`);
+                fetchModels();
+                if (activeModel === modelName) setActiveModel(models.find(m => m.name !== modelName)?.name || '');
+            }
+        } catch { setStatusMsg('⚠️ Delete failed'); }
+        setTimeout(() => setStatusMsg(''), 4000);
     };
 
     const formatSize = (bytes: number) => {
@@ -82,105 +177,283 @@ export default function AI() {
         return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
     };
 
+    const formatParams = (params: number) => {
+        if (params >= 1e9) return `${(params / 1e9).toFixed(2)}B`;
+        if (params >= 1e6) return `${(params / 1e6).toFixed(0)}M`;
+        return `${params}`;
+    };
+
+    const formatContext = (ctx: number) => {
+        if (ctx >= 1e6) return `${(ctx / 1e6).toFixed(0)}M`;
+        if (ctx >= 1e3) return `${(ctx / 1e3).toFixed(0)}K`;
+        return `${ctx}`;
+    };
+
+    const archBadge = (arch: string) => {
+        const colors: Record<string, string> = {
+            rwkv: '#10b981',    // green — flagship
+            qwen2: '#3b82f6',   // blue
+            llama: '#f59e0b',   // amber
+            phi3: '#8b5cf6',    // purple
+        };
+        return colors[arch] || '#6b7280';
+    };
+
+    const runningCount = services.filter(s => s.running).length;
+    const ramGB = resources ? (resources.ram_total_mb / 1024).toFixed(1) : '?';
+    const diskUsedGB = resources ? Math.round(resources.disk_total_gb - resources.disk_free_gb) : 0;
+    const diskPercent = resources ? Math.round(diskUsedGB / resources.disk_total_gb * 100) : 0;
+
     return (
-        <>
-            <div className="page-header">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                        <h2>AI Inference</h2>
-                        <p>Chat with your local AI — all data stays on your hardware</p>
+        <div className="ai-layout">
+            {/* LEFT PANEL — System + Services + AI Engine */}
+            <aside className="ai-panel-left">
+                <div className="card compact">
+                    <div className="card-title">System</div>
+                    <div className="mini-stats">
+                        <div className="mini-stat">
+                            <span className="mini-stat-value" style={{ color: 'var(--accent-green)' }}>{runningCount}/{services.length}</span>
+                            <span className="mini-stat-label">Services</span>
+                        </div>
+                        <div className="mini-stat">
+                            <span className="mini-stat-value">{resources?.cpu_cores || '?'}</span>
+                            <span className="mini-stat-label">CPU Cores</span>
+                        </div>
+                        <div className="mini-stat">
+                            <span className="mini-stat-value" style={{ color: 'var(--accent-cyan)' }}>{ramGB}G</span>
+                            <span className="mini-stat-label">RAM</span>
+                        </div>
+                        <div className="mini-stat">
+                            <span className="mini-stat-value" style={{ color: 'var(--accent-primary)' }}>{resources?.disk_free_gb || '?'}G</span>
+                            <span className="mini-stat-label">Disk Free</span>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <span className={`badge ${aiStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                            {aiStatus?.running ? '🟢 Ollama Running' : '🔴 Ollama Offline'}
-                        </span>
-                        <span className="badge badge-blue">🧠 {activeModel || 'no model'}</span>
+
+                    <div style={{ margin: '12px 0 8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)' }}>
+                            <span>Disk</span>
+                            <span className="mono">{diskUsedGB}/{resources?.disk_total_gb || 0}GB</span>
+                        </div>
+                        <div className="progress-bar" style={{ marginTop: 4 }}>
+                            <div className="progress-fill disk" style={{ width: `${diskPercent}%` }} />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="grid-2" style={{ marginBottom: 24 }}>
-                <div className="card">
-                    <div className="card-title">Installed Models</div>
-                    {models.length === 0 ? (
-                        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                            No models installed. Pull one via SSH: <code>sudo docker exec sovereign-ollama ollama pull qwen2.5:0.5b</code>
+                <div className="card compact">
+                    <div className="card-title">Services</div>
+                    {services.length === 0 ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading...</div>
+                    ) : (
+                        <div className="service-list">
+                            {services.map(s => (
+                                <div key={s.name} className="service-row">
+                                    <span className={`status-dot ${s.running ? 'up' : 'down'}`} />
+                                    <span className="service-name">{s.name.replace('sovereign-', '')}</span>
+                                    <span className={`badge badge-sm ${s.running ? 'badge-green' : 'badge-red'}`}>
+                                        {s.running ? 'Up' : 'Down'}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="card compact">
+                    <div className="card-title">Hardware</div>
+                    <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                        <div style={{ color: 'var(--text-muted)' }}>CPU</div>
+                        <div className="mono" style={{ fontSize: 11 }}>{resources?.cpu_model || 'Unknown'}</div>
+                        <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>GPU</div>
+                        <div style={{ fontSize: 12 }}>{resources?.gpu_name || 'CPU Only'}</div>
+                        <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Tier</div>
+                        <div style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{aiStatus?.gpu_tier || 'cpu'}</div>
+                    </div>
+                </div>
+
+                {/* AI Engine — Phone Status */}
+                <div className="card compact">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="card-title" style={{ marginBottom: 0 }}>📱 AI Engine</div>
+                        <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
+                            {phoneStatus?.running ? '🟢' : '🔴'}
+                        </span>
+                    </div>
+                    {phoneStatus?.running ? (
+                        <div style={{ fontSize: 12, lineHeight: 2, marginTop: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Model</span>
+                                <span className="mono" style={{ color: 'var(--accent-green)', fontWeight: 600, fontSize: 11 }}>
+                                    {phoneStatus.display_name || phoneStatus.model}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Params</span>
+                                <span className="mono" style={{ fontSize: 11 }}>{formatParams(phoneStatus.params)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Context</span>
+                                <span className="mono" style={{ fontSize: 11 }}>{formatContext(phoneStatus.context)} tokens</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Engine</span>
+                                <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
+                            </div>
                         </div>
                     ) : (
-                        <table>
-                            <thead>
-                                <tr><th>Model</th><th>Size</th><th></th></tr>
-                            </thead>
-                            <tbody>
-                                {models.map(m => (
-                                    <tr key={m.name}>
-                                        <td><strong className="mono">{m.name}</strong></td>
-                                        <td className="mono">{formatSize(m.size)}</td>
-                                        <td>
-                                            <button
-                                                className={`btn btn-sm ${activeModel === m.name ? 'btn-primary' : ''}`}
-                                                onClick={() => setActiveModel(m.name)}
-                                            >
-                                                {activeModel === m.name ? 'Active' : 'Use'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>
+                            llama-server not reachable
+                        </div>
                     )}
                 </div>
+            </aside>
 
-                <div className="card">
-                    <div className="card-title">Hardware</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>CPU</span>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{resources?.cpu_model || 'Unknown'}</div>
+            {/* CENTER — AI Chat */}
+            <div className="ai-panel-center">
+                {statusMsg && (
+                    <div style={{
+                        padding: '6px 12px', marginBottom: 12, borderRadius: 8, fontSize: 12,
+                        background: statusMsg.startsWith('✅') ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.12)',
+                        border: `1px solid ${statusMsg.startsWith('✅') ? 'rgba(34,197,94,0.25)' : 'rgba(234,179,8,0.25)'}`,
+                    }}>
+                        {statusMsg}
+                    </div>
+                )}
+
+                <div className="chat-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div className="card-title" style={{ marginBottom: 0 }}>AI Chat</div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span className={`badge badge-sm ${aiStatus?.running ? 'badge-green' : 'badge-red'}`}>
+                                {aiStatus?.running ? '🟢 Online' : '🔴 Offline'}
+                            </span>
+                            {models.length > 0 && (
+                                <select
+                                    value={activeModel}
+                                    onChange={e => setActiveModel(e.target.value)}
+                                    className="model-select"
+                                >
+                                    {models.map(m => (
+                                        <option key={m.name} value={m.name}>{m.name}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
-                        <div>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>RAM</span>
-                            <div style={{ fontWeight: 600 }}>{resources ? (resources.ram_total_mb / 1024).toFixed(1) : '?'} GB</div>
-                        </div>
-                        <div>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>GPU</span>
-                            <div style={{ fontWeight: 600 }}>{resources?.gpu_name || 'CPU Only'}</div>
-                        </div>
-                        <div>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>GPU Tier</span>
-                            <div style={{ fontWeight: 600, color: 'var(--accent-green)' }}>{aiStatus?.gpu_tier || 'cpu'}</div>
-                        </div>
+                    </div>
+
+                    <div className="chat-messages">
+                        {messages.map((msg, i) => (
+                            <div key={i} className={`chat-message ${msg.role}`}>
+                                <div className="chat-bubble">{msg.content || '...'}</div>
+                            </div>
+                        ))}
+                        {isLoading && messages[messages.length - 1]?.content === '' && (
+                            <div className="chat-message assistant">
+                                <div className="chat-bubble" style={{ color: 'var(--text-muted)' }}>Thinking...</div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="chat-input-container">
+                        <input
+                            className="chat-input"
+                            placeholder={activeModel ? `Chat with ${activeModel}...` : 'Waiting for llama-server...'}
+                            value={input}
+                            onChange={e => setInput(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSend()}
+                            disabled={isLoading || !aiStatus?.running}
+                        />
+                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || !aiStatus?.running}>Send</button>
+                        {isLoading && (
+                            <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ Stop</button>
+                        )}
                     </div>
                 </div>
             </div>
 
-            <div className="card" style={{ height: 'calc(100vh - 440px)', minHeight: 300, display: 'flex', flexDirection: 'column' }}>
-                <div className="card-title">AI Chat</div>
-                <div className="chat-messages" style={{ flex: 1, overflowY: 'auto' }}>
-                    {messages.map((msg, i) => (
-                        <div key={i} className={`chat-message ${msg.role}`}>
-                            <div className="chat-bubble">{msg.content || '...'}</div>
-                        </div>
-                    ))}
-                    {isLoading && messages[messages.length - 1]?.content === '' && (
-                        <div className="chat-message assistant">
-                            <div className="chat-bubble" style={{ color: 'var(--text-muted)' }}>Thinking...</div>
+            {/* RIGHT PANEL — Models */}
+            <aside className="ai-panel-right">
+                <div className="card compact">
+                    <div className="card-title">Installed Models</div>
+                    {models.length === 0 ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No models. Pull one below.</div>
+                    ) : (
+                        <div className="model-list">
+                            {models.map(m => (
+                                <div key={m.name} className={`model-row ${activeModel === m.name ? 'active' : ''}`}>
+                                    <div>
+                                        <div className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{m.name}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{formatSize(m.size)}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                        <button
+                                            className={`btn btn-sm ${activeModel === m.name ? 'btn-primary' : ''}`}
+                                            onClick={() => setActiveModel(m.name)}
+                                            style={{ fontSize: 10, padding: '2px 8px' }}
+                                        >
+                                            {activeModel === m.name ? '●' : 'Use'}
+                                        </button>
+                                        <button
+                                            className="btn btn-sm"
+                                            onClick={() => handleDelete(m.name)}
+                                            style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent-red)' }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
-                    <div ref={messagesEndRef} />
                 </div>
-                <div className="chat-input-container">
-                    <input
-                        className="chat-input"
-                        placeholder="Ask your sovereign AI anything..."
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSend()}
-                        disabled={isLoading}
-                    />
-                    <button className="btn btn-primary" onClick={handleSend} disabled={isLoading}>Send</button>
+
+                <div className="card compact">
+                    <div className="card-title">GGUF Catalog</div>
+                    <div className="model-list">
+                        {catalog.map(m => (
+                            <div key={m.name} className="model-row">
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span className="mono" style={{ fontSize: 11, fontWeight: 500 }}>{m.display_name}</span>
+                                        <span style={{
+                                            fontSize: 8, padding: '1px 5px', borderRadius: 4,
+                                            background: archBadge(m.architecture) + '22',
+                                            color: archBadge(m.architecture),
+                                            fontWeight: 700, textTransform: 'uppercase',
+                                        }}>
+                                            {m.architecture}
+                                        </span>
+                                    </div>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.description} · {m.size_gb} GB</div>
+                                </div>
+                                <div>
+                                    {m.installed ? (
+                                        <span style={{ fontSize: 10, color: 'var(--accent-green)' }}>✓</span>
+                                    ) : (
+                                        <button
+                                            className="btn btn-sm btn-primary"
+                                            onClick={() => handlePull(m.name)}
+                                            disabled={!!pulling}
+                                            style={{ fontSize: 10, padding: '2px 8px' }}
+                                        >
+                                            {pulling === m.name ? '⏳' : 'Pull'}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {pulling && (
+                        <div style={{
+                            marginTop: 8, padding: '4px 8px', background: 'var(--bg-secondary)',
+                            borderRadius: 6, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)',
+                        }}>
+                            ⏳ {pullProgress || 'Connecting...'}
+                        </div>
+                    )}
                 </div>
-            </div>
-        </>
+            </aside>
+        </div>
     );
 }

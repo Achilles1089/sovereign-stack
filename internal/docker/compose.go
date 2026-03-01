@@ -99,38 +99,7 @@ func GenerateCoreCompose(cfg *config.Config) *ComposeFile {
 		compose.Volumes["postgres_data"] = nil
 	}
 
-	// Ollama (only on Linux — macOS uses native Ollama)
-	if cfg.Services.Ollama && cfg.AI.OllamaMode == "container" {
-		ollamaService := &ComposeService{
-			Image:         "ollama/ollama:latest",
-			ContainerName: "sovereign-ollama",
-			Restart:       "unless-stopped",
-			Ports:         []string{"11434:11434"},
-			Volumes:       []string{"ollama_data:/root/.ollama"},
-			Labels:        sovLabels,
-			Networks:      []string{"sovereign"},
-		}
-
-		// Add GPU passthrough for NVIDIA
-		if cfg.Hardware.GPUType == "nvidia" {
-			ollamaService.Deploy = &DeployConfig{
-				Resources: &Resources{
-					Reservations: &Reservations{
-						Devices: []Device{
-							{
-								Driver:       "nvidia",
-								Count:        "all",
-								Capabilities: [][]string{{"gpu"}},
-							},
-						},
-					},
-				},
-			}
-		}
-
-		compose.Services["ollama"] = ollamaService
-		compose.Volumes["ollama_data"] = nil
-	}
+	// llama-server runs natively — no Docker container needed for AI inference
 
 	// Caddy reverse proxy
 	if cfg.Services.Caddy {
