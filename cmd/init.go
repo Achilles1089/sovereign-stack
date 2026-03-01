@@ -34,8 +34,8 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
-	fmt.Println("  ⚡ Sovereign Stack — Init Wizard")
-	fmt.Println("  ─────────────────────────────────")
+	fmt.Println("  \u26a1 Sovereign Stack \u2014 Init Wizard")
+	fmt.Println("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
 	fmt.Println()
 
 	// Step 1: Platform detection
@@ -59,7 +59,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := preflightChecks(pinfo, hw); err != nil {
 		return err
 	}
-	fmt.Println("         ✓ All checks passed")
+	fmt.Println("         \u2713 All checks passed")
 	fmt.Println()
 
 	// Step 4: AI model recommendation
@@ -114,17 +114,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 	dockerReady := true
 	if err := checkDocker(pinfo); err != nil {
 		dockerReady = false
-		fmt.Println("         ⚠  Docker not available — services won't start yet")
+		fmt.Println("         \u26a0  Docker not available \u2014 services won't start yet")
 		fmt.Println("         Install Docker, then run: docker compose -f " + composePath + " up -d")
 	} else {
-		fmt.Println("         ✓ Docker is ready")
+		fmt.Println("         \u2713 Docker is ready")
 	}
 	fmt.Println()
 
 	// Step 8: Summary
 	fmt.Println("  [8/8] Setup complete!")
 	if !dockerReady {
-		fmt.Println("         (Docker services pending — install Docker to start them)")
+		fmt.Println("         (Docker services pending \u2014 install Docker to start them)")
 	}
 	fmt.Println()
 	printSummary(cfg, pinfo)
@@ -137,7 +137,7 @@ func preflightChecks(pinfo *platform.Info, hw *config.HardwareProfile) error {
 		return fmt.Errorf("insufficient disk space: %d GB free (minimum 20 GB required)", hw.DiskFreeGB)
 	}
 	if hw.RAMTotalMB < 2048 {
-		fmt.Println("         ⚠ Low RAM detected (< 2 GB). Performance may be limited.")
+		fmt.Println("         \u26a0 Low RAM detected (<2 GB). Performance may be limited.")
 	}
 	if pinfo.Platform == platform.PlatformLinux && !pinfo.IsRoot {
 		return fmt.Errorf("sovereign init requires root privileges on Linux. Run with: sudo sovereign init")
@@ -149,7 +149,7 @@ func checkDocker(pinfo *platform.Info) error {
 	_, err := exec.Command("docker", "version").Output()
 	if err != nil {
 		if pinfo.NeedsDockerDesktop() {
-			fmt.Println("         ✗ Docker Desktop not found.")
+			fmt.Println("         \u2717 Docker Desktop not found.")
 			fmt.Println("         Please install Docker Desktop from: https://docker.com/products/docker-desktop")
 			return fmt.Errorf("Docker Desktop is required but not installed")
 		}
@@ -161,20 +161,20 @@ func checkDocker(pinfo *platform.Info) error {
 }
 
 func printSummary(cfg *config.Config, pinfo *platform.Info) {
-	fmt.Println("  ┌─────────────────────────────────────────────┐")
-	fmt.Println("  │         🏰 Sovereign Stack is Ready         │")
-	fmt.Println("  ├─────────────────────────────────────────────┤")
-	fmt.Printf("  │  Platform:  %-31s │\n", pinfo)
-	fmt.Printf("  │  AI Model:  %-31s │\n", cfg.AI.DefaultModel)
-	fmt.Printf("  │  Engine:    %-31s │\n", "llama-server")
-	fmt.Printf("  │  Config:    %-31s │\n", "~/.sovereign/config.yaml")
-	fmt.Println("  ├─────────────────────────────────────────────┤")
-	fmt.Println("  │  Next steps:                                │")
-	fmt.Println("  │    sovereign status    — Check services     │")
-	fmt.Println("  │    sovereign app list  — Browse apps        │")
-	fmt.Println("  │    sovereign ai chat   — Chat with AI       │")
-	fmt.Println("  │    sovereign ai pull   — Download AI model  │")
-	fmt.Println("  └─────────────────────────────────────────────┘")
+	fmt.Println("  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510")
+	fmt.Println("  \u2502         \ud83c\udff0 Sovereign Stack is Ready         \u2502")
+	fmt.Println("  \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524")
+	fmt.Printf("  \u2502  Platform:  %-31s \u2502\n", pinfo)
+	fmt.Printf("  \u2502  AI Model:  %-31s \u2502\n", cfg.AI.DefaultModel)
+	fmt.Printf("  \u2502  Engine:    %-31s \u2502\n", "llama-server")
+	fmt.Printf("  \u2502  Config:    %-31s \u2502\n", "~/.sovereign/config.yaml")
+	fmt.Println("  \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524")
+	fmt.Println("  \u2502  Next steps:                                \u2502")
+	fmt.Println("  \u2502    sovereign status    \u2014 Check services     \u2502")
+	fmt.Println("  \u2502    sovereign app list  \u2014 Browse apps        \u2502")
+	fmt.Println("  \u2502    sovereign ai chat   \u2014 Chat with AI       \u2502")
+	fmt.Println("  \u2502    sovereign ai pull   \u2014 Download AI model  \u2502")
+	fmt.Println("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518")
 	fmt.Println()
 }
 
