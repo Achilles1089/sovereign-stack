@@ -140,7 +140,7 @@ You have access to live system information. Use it to answer questions accuratel
 ## Interaction Style
 - Be concise and direct
 - When reporting numbers, format them readably (e.g., "128 GB RAM" not "131072 MB")
-- Use emoji sparingly for status (🟢 running, 🔴 stopped, ⚠️ warning)
+- Use emoji sparingly for status (%s running, %s stopped, %s warning)
 - If you don't have data about something, say so clearly
 - Proactively suggest relevant actions (e.g., "You could install Grafana for monitoring")
 
@@ -149,6 +149,7 @@ You have access to live system information. Use it to answer questions accuratel
 - GPU: %s (%s tier, %d MB)
 - The server has %d apps in the marketplace, %d categories
 `, string(contextJSON),
+		"\ud83d\udfe2", "\ud83d\udd34", "\u26a0\ufe0f",
 		ctx.Platform, ctx.Mode,
 		ctx.Hardware.GPUName, ctx.GPUTier, ctx.Hardware.GPUMemoryMB,
 		len(ctx.Apps), countCategories(ctx.Apps),
