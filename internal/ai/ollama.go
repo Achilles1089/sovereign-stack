@@ -286,7 +286,7 @@ func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content
 	}
 
 	// Parse streaming JSON lines from /completion endpoint
-	reader := bufio.NewReader(resp.Body)
+	reader := bufio.NewReaderSize(resp.Body, 256) // Small buffer for instant token delivery
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
@@ -402,9 +402,9 @@ func extractPort(host string) string {
 }
 
 func escapeJSONString(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	s = strings.ReplaceAll(s, "\n", `\n`)
-	s = strings.ReplaceAll(s, "\t", `\t`)
+	s = strings.ReplaceAll(s, `\\`, `\\\\`)
+	s = strings.ReplaceAll(s, `"`, `\\"`)
+	s = strings.ReplaceAll(s, "\n", `\\n`)
+	s = strings.ReplaceAll(s, "\t", `\\t`)
 	return s
 }
