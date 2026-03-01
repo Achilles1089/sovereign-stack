@@ -83,7 +83,9 @@ export default function AI() {
         try {
             const chatMessages = messages.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
             chatMessages.push({ role: 'user' as const, content: input });
-            await api.chat(activeModel, chatMessages, (chunk) => {
+            // Limit context to last 10 messages \u2014 phone CPU prefill is slow on long history
+            const contextWindow = chatMessages.slice(-10);
+            await api.chat(activeModel, contextWindow, (chunk) => {
                 // Buffer chunks and batch state updates via requestAnimationFrame
                 chunkBufferRef.current += chunk;
                 if (!rafRef.current) {
