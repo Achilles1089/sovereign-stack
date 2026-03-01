@@ -76,8 +76,8 @@ func (s *Server) Start() error {
 		})
 	}
 
-	fmt.Printf("  🌐 Dashboard: http://%s\n", s.addr)
-	fmt.Printf("  📡 API:       http://%s/api/\n", s.addr)
+	fmt.Printf("  \ud83c\udf10 Dashboard: http://%s\n", s.addr)
+	fmt.Printf("  \ud83d\udce1 API:       http://%s/api/\n", s.addr)
 	return http.ListenAndServe(s.addr, corsMiddleware(mux))
 }
 
@@ -273,9 +273,11 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		req.Model = s.cfg.AI.DefaultModel
 	}
 
-	// Stream the response
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Transfer-Encoding", "chunked")
+	// Stream the response — anti-buffering headers are critical for Caddy/proxy
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Connection", "keep-alive")
 	flusher, ok := w.(http.Flusher)
 
 	err := s.client.Chat(req.Model, req.Messages, func(content string, done bool) {
@@ -320,9 +322,11 @@ func (s *Server) handleServerChat(w http.ResponseWriter, r *http.Request) {
 		{Role: "user", Content: req.Message},
 	}
 
-	// Stream the response
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Transfer-Encoding", "chunked")
+	// Stream the response — anti-buffering headers are critical for Caddy/proxy
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Connection", "keep-alive")
 	flusher, ok := w.(http.Flusher)
 
 	err := s.client.Chat(model, messages, func(content string, done bool) {
