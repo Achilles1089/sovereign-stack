@@ -113,7 +113,7 @@ export const api = {
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            onChunk(decoder.decode(value));
+            onChunk(decoder.decode(value, { stream: true }));
         }
     },
 
@@ -132,7 +132,7 @@ export const api = {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                onChunk(decoder.decode(value));
+                onChunk(decoder.decode(value, { stream: true }));
             }
         } catch (e) {
             reader.cancel();
