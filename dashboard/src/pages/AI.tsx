@@ -472,22 +472,37 @@ export default function AI() {
                                                 disabled={switching || isActive}
                                                 onClick={async () => {
                                                     setSwitching(true);
-                                                    setStatusMsg(`Loading ${displayName}...`);
+                                                    const estTime = m.size_mb > 3000 ? '30-60s' : m.size_mb > 1500 ? '15-30s' : '5-15s';
+                                                    setStatusMsg(`Loading ${displayName}... (est. ${estTime})`);
                                                     try {
                                                         await api.switchPhoneModel(m.name);
-                                                        await new Promise(r => setTimeout(r, 6000));
+                                                        // Poll health every 3s for up to 90s
+                                                        let loaded = false;
+                                                        for (let i = 0; i < 30; i++) {
+                                                            await new Promise(r => setTimeout(r, 3000));
+                                                            setStatusMsg(`Loading ${displayName}... ${(i + 1) * 3}s`);
+                                                            try {
+                                                                const s = await api.getAIStatus();
+                                                                if (s.running) {
+                                                                    loaded = true;
+                                                                    setAiStatus(s);
+                                                                    setActiveModel(s.model || '');
+                                                                    break;
+                                                                }
+                                                            } catch { /* still loading */ }
+                                                        }
                                                         fetchPhoneStatus();
-                                                        setStatusMsg(`${displayName} loaded!`);
+                                                        setStatusMsg(loaded ? `${displayName} ready!` : `${displayName} still loading — check dashboard`);
                                                     } catch {
                                                         setStatusMsg('Switch failed');
                                                     } finally {
                                                         setSwitching(false);
-                                                        setTimeout(() => setStatusMsg(''), 3000);
+                                                        setTimeout(() => setStatusMsg(''), 5000);
                                                     }
                                                 }}
                                                 style={{ fontSize: 10, padding: '2px 8px' }}
                                             >
-                                                {isActive ? '● Active' : 'Use'}
+                                                {isActive ? '● Active' : switching ? '⏳' : 'Use'}
                                             </button>
                                             <button
                                                 className="btn btn-sm"
