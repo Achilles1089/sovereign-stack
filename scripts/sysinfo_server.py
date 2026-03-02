@@ -128,13 +128,13 @@ def switch_model(model_name):
     size_mb = os.path.getsize(model_path) // (1024 * 1024)
     threads = 2  # 2 big A75 cores
 
-    # Dynamic context: large models get smaller context to fit in RAM
-    if size_mb > 4000:      # 7B Q4 (4.3GB) — very tight
-        ctx_size = 512
-    elif size_mb > 3000:    # 7B Q3 (3.5GB), 2.9B Q8 (3.0GB)
-        ctx_size = 1024
-    elif size_mb > 1500:    # 3B models (~2GB)
+    # Dynamic context: with -fa + q8_0 KV cache, memory is minimal (~28MB per 1024 tokens for 7B)
+    if size_mb > 4000:      # 7B Q4 (4.3GB) — leaves ~200MB, fits 2048 ctx
         ctx_size = 2048
+    elif size_mb > 3000:    # 7B Q3 (3.5GB), 2.9B Q8 (3.0GB)
+        ctx_size = 2048
+    elif size_mb > 1500:    # 3B models (~2GB)
+        ctx_size = 4096
     else:                   # 1.5B and smaller
         ctx_size = 4096
 
