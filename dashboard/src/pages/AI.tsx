@@ -271,76 +271,63 @@ export default function AI() {
                     </div>
                 </div>
 
-                {/* AI Engine — Phone Status */}
-                <div className="card compact">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="card-title" style={{ marginBottom: 0 }}>AI Engine</div>
-                        <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                            {phoneStatus?.running ? <span className="status-dot up" /> : <span className="status-dot down" />}
-                        </span>
-                    </div>
-                    {phoneStatus?.running ? (
-                        <div style={{ fontSize: 12, lineHeight: 2, marginTop: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Model</span>
-                                <span className="mono" style={{ color: 'var(--accent-green)', fontWeight: 600, fontSize: 11 }}>
-                                    {phoneStatus.display_name || phoneStatus.model}
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Params</span>
-                                <span className="mono" style={{ fontSize: 11 }}>{formatParams(phoneStatus.params)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Context</span>
-                                <span className="mono" style={{ fontSize: 11 }}>{formatContext(phoneStatus.context)} tokens</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Engine</span>
-                                <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
-                            </div>
-                            {phoneStatus.phone_model && (
+                {/* Phone Hardware */}
+                {phoneStatus?.phone_model && (
+                    <div className="card compact">
+                        <div className="card-title">Phone Hardware</div>
+                        <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                            <div style={{ color: 'var(--text-muted)' }}>Device</div>
+                            <div className="mono" style={{ fontSize: 11, color: 'var(--accent-cyan)' }}>{phoneStatus.phone_model}</div>
+                            {phoneStatus.soc && (
                                 <>
-                                    <div style={{ borderTop: '1px solid var(--bg-tertiary)', margin: '6px 0', opacity: 0.3 }} />
-                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <span style={{ color: 'var(--text-muted)' }}>Device</span>
-                                        <span className="mono" style={{ fontSize: 11, color: 'var(--accent-cyan)' }}>{phoneStatus.phone_model}</span>
+                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>SoC</div>
+                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.soc}</div>
+                                </>
+                            )}
+                            {phoneStatus.phone_cpu_cores && phoneStatus.phone_cpu_cores > 0 && (
+                                <>
+                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>CPU</div>
+                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.phone_cpu_cores} cores</div>
+                                </>
+                            )}
+                            {phoneStatus.phone_ram_total_mb && phoneStatus.phone_ram_total_mb > 0 && (
+                                <>
+                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>RAM</div>
+                                    <div className="mono" style={{ fontSize: 11 }}>
+                                        {(phoneStatus.phone_ram_total_mb / 1024).toFixed(1)}G
+                                        {phoneStatus.phone_ram_available_mb ? (
+                                            <span style={{ color: 'var(--text-muted)' }}> / {(phoneStatus.phone_ram_available_mb / 1024).toFixed(1)}G free</span>
+                                        ) : null}
                                     </div>
-                                    {phoneStatus.soc && (
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-muted)' }}>SoC</span>
-                                            <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.soc}</span>
-                                        </div>
-                                    )}
-                                    {phoneStatus.phone_ram_total_mb && phoneStatus.phone_ram_total_mb > 0 && (
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-muted)' }}>Phone RAM</span>
-                                            <span className="mono" style={{ fontSize: 11 }}>
-                                                {(phoneStatus.phone_ram_total_mb / 1024).toFixed(1)}G
-                                            </span>
-                                        </div>
-                                    )}
-                                    {phoneStatus.battery_pct != null && phoneStatus.battery_pct >= 0 && (
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-muted)' }}>Battery</span>
-                                            <span className="mono" style={{
-                                                fontSize: 11,
-                                                color: phoneStatus.battery_pct > 50 ? 'var(--accent-green)' :
-                                                    phoneStatus.battery_pct > 20 ? 'var(--accent-primary)' : 'var(--accent-red)'
-                                            }}>
-                                                {phoneStatus.battery_pct}%
-                                            </span>
-                                        </div>
-                                    )}
+                                </>
+                            )}
+                            {phoneStatus.phone_storage_free_gb != null && phoneStatus.phone_storage_free_gb > 0 && (
+                                <>
+                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Storage</div>
+                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.phone_storage_free_gb}G free</div>
+                                </>
+                            )}
+                            {phoneStatus.battery_pct != null && phoneStatus.battery_pct >= 0 && (
+                                <>
+                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Battery</div>
+                                    <div className="mono" style={{
+                                        fontSize: 11,
+                                        color: phoneStatus.battery_pct > 50 ? 'var(--accent-green)' :
+                                            phoneStatus.battery_pct > 20 ? 'var(--accent-primary)' : 'var(--accent-red)'
+                                    }}>
+                                        {phoneStatus.battery_pct}%
+                                    </div>
+                                </>
+                            )}
+                            {phoneStatus.android_version && (
+                                <>
+                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Android</div>
+                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.android_version}</div>
                                 </>
                             )}
                         </div>
-                    ) : (
-                        <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>
-                            llama-server not reachable
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </aside>
 
             {/* CENTER — AI Chat */}
@@ -407,8 +394,44 @@ export default function AI() {
                 </div>
             </div>
 
-            {/* RIGHT PANEL — Models */}
+            {/* RIGHT PANEL — AI Engine + Models */}
             <aside className="ai-panel-right">
+                {/* AI Engine — moved from left sidebar */}
+                <div className="card compact">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="card-title" style={{ marginBottom: 0 }}>AI Engine</div>
+                        <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
+                            {phoneStatus?.running ? <span className="status-dot up" /> : <span className="status-dot down" />}
+                        </span>
+                    </div>
+                    {phoneStatus?.running ? (
+                        <div style={{ fontSize: 12, lineHeight: 2, marginTop: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Model</span>
+                                <span className="mono" style={{ color: 'var(--accent-green)', fontWeight: 600, fontSize: 11 }}>
+                                    {phoneStatus.display_name || phoneStatus.model}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Params</span>
+                                <span className="mono" style={{ fontSize: 11 }}>{formatParams(phoneStatus.params)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Context</span>
+                                <span className="mono" style={{ fontSize: 11 }}>{formatContext(phoneStatus.context)} tokens</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Engine</span>
+                                <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>
+                            llama-server not reachable
+                        </div>
+                    )}
+                </div>
+
                 <div className="card compact">
                     <div className="card-title">Installed Models</div>
                     {models.length === 0 ? (
