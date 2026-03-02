@@ -243,29 +243,24 @@ func formatRWKVPrompt(messages []ChatMessage) string {
 	return sb.String()
 }
 
-// Chat sends a chat message using the /v1/chat/completions endpoint (OpenAI-compatible)
-// This lets llama-server apply the correct chat template from the GGUF metadata
+// Chat sends a message using /completion with RWKV's native QA format
+// The raw completion endpoint lets the model respond naturally without template mangling
 func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content string, done bool)) error {
-	type chatMsg struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	}
+	// Build prompt using only User/Assistant turns — no system prompt injection
+	prompt := formatRWKVPrompt(messages)
 
 	reqBody := struct {
-		Model       string    `json:"model"`
-		Messages    []chatMsg `json:"messages"`
-		Stream      bool      `json:"stream"`
-		Temperature float64   `json:"temperature"`
-		MaxTokens   int       `json:"max_tokens"`
+		Prompt      string   `json:"prompt"`
+		NPredict    int      `json:"n_predict"`
+		Stream      bool     `json:"stream"`
+		Stop        []string `json:"stop"`
+		Temperature float64  `json:"temperature"`
 	}{
-		Model:       model,
+		Prompt:      prompt,
+		NPredict:    512,
 		Stream:      true,
-		Temperature: 0.7,
-		MaxTokens:   1024,
-	}
-
-	for _, m := range messages {
-		reqBody.Messages = append(reqBody.Messages, chatMsg{Role: m.Role, Content: m.Content})
+		Stop:        []string{"User:", "\nUser"},
+		Temperature: 1.0,
 	}
 
 	data, err := json.Marshal(reqBody)
@@ -273,7 +268,7 @@ func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL()+"/v1/chat/completions", strings.NewReader(string(data)))
+	req, err := http.NewRequest("POST", c.baseURL()+"/completion", strings.NewReader(string(data)))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -291,7 +286,7 @@ func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content
 		return fmt.Errorf("llama-server returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse SSE streaming from /v1/chat/completions
+	// Parse streaming JSON lines from /completion
 	reader := bufio.NewReaderSize(resp.Body, 256)
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -310,27 +305,20 @@ func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content
 		}
 
 		var chunk struct {
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-				FinishReason *string `json:"finish_reason"`
-			} `json:"choices"`
+			Content string `json:"content"`
+			Stop    bool   `json:"stop"`
 		}
 
 		if err := json.Unmarshal([]byte(lineStr), &chunk); err != nil {
 			continue
 		}
 
-		if len(chunk.Choices) > 0 {
-			content := chunk.Choices[0].Delta.Content
-			done := chunk.Choices[0].FinishReason != nil
-			if onChunk != nil && content != "" {
-				onChunk(content, done)
-			}
-			if done {
-				break
-			}
+		if onChunk != nil {
+			onChunk(chunk.Content, chunk.Stop)
+		}
+
+		if chunk.Stop {
+			break
 		}
 	}
 

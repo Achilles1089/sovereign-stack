@@ -289,22 +289,6 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		req.Model = s.cfg.AI.DefaultModel
 	}
 
-	// Ensure a system prompt exists — RWKV World models need one to stay in English
-	hasSystem := false
-	for _, m := range req.Messages {
-		if m.Role == "system" {
-			hasSystem = true
-			break
-		}
-	}
-	if !hasSystem {
-		systemMsg := ai.ChatMessage{
-			Role:    "system",
-			Content: "You are a helpful AI assistant. Respond concisely in English.",
-		}
-		req.Messages = append([]ai.ChatMessage{systemMsg}, req.Messages...)
-	}
-
 	// Stream the response — anti-buffering headers are critical for Caddy/proxy
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
