@@ -63,6 +63,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/ai/delete", s.handleAIDelete)
 	mux.HandleFunc("/api/ai/switch", s.handleAISwitch)
 	mux.HandleFunc("/api/ai/phone-status", s.handlePhoneStatus)
+	mux.HandleFunc("/api/ai/phone-models", s.handlePhoneModels)
+	mux.HandleFunc("/api/ai/phone-switch", s.handlePhoneSwitch)
 
 	// Serve static dashboard files (SPA fallback)
 	if s.staticDir != "" {
@@ -548,6 +550,69 @@ func fetchPhoneHardware(llamaHost string) *phoneHardwareInfo {
 		return nil
 	}
 	return &hw
+}
+
+// handlePhoneModels lists available GGUF models on the phone
+func (s *Server) handlePhoneModels(w http.ResponseWriter, r *http.Request) {
+	host := s.client.Host
+	if idx := strings.LastIndex(host, ":"); idx >= 0 {
+		host = host[:idx]
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://%s:8086/models", host))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": "sysinfo companion not reachable"})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Write(body)
+}
+
+// handlePhoneSwitch switches the active model on the phone by restarting llama-server
+func (s *Server) handlePhoneSwitch(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(200)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	host := s.client.Host
+	if idx := strings.LastIndex(host, ":"); idx >= 0 {
+		host = host[:idx]
+	}
+
+	// Forward the request body to sysinfo companion
+	body, _ := io.ReadAll(r.Body)
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("POST", fmt.Sprintf("http://%s:8086/switch", host), strings.NewReader(string(body)))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "error": "sysinfo companion not reachable"})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Write(respBody)
 }
 
 // deriveModelDisplayName converts a GGUF filename/model ID into a readable display name

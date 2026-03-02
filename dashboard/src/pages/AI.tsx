@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { api, type AIModel, type AIStatus, type SystemResources, type ServiceStatus, type CatalogEntry, type PhoneStatus } from '../api/client';
+import { api, type AIModel, type AIStatus, type SystemResources, type ServiceStatus, type CatalogEntry, type PhoneStatus, type PhoneModel } from '../api/client';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -22,6 +22,8 @@ export default function AI() {
     const [statusMsg, setStatusMsg] = useState('');
     const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
     const [phoneStatus, setPhoneStatus] = useState<PhoneStatus | null>(null);
+    const [phoneModels, setPhoneModels] = useState<PhoneModel[]>([]);
+    const [switching, setSwitching] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -40,6 +42,7 @@ export default function AI() {
 
     const fetchPhoneStatus = () => {
         api.getPhoneStatus().then(d => setPhoneStatus(d)).catch(() => setPhoneStatus(null));
+        api.getPhoneModels().then(d => setPhoneModels(d.models || [])).catch(() => { });
     };
 
     useEffect(() => {
@@ -424,10 +427,57 @@ export default function AI() {
                                 <span style={{ color: 'var(--text-muted)' }}>Engine</span>
                                 <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
                             </div>
+                            {phoneModels.length > 1 && (
+                                <div style={{ borderTop: '1px solid var(--bg-tertiary)', margin: '8px 0 4px', opacity: 0.3 }} />
+                            )}
+                            {phoneModels.length > 1 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>Switch</span>
+                                    <select
+                                        value={phoneStatus.model}
+                                        disabled={switching}
+                                        onChange={async (e) => {
+                                            const model = e.target.value;
+                                            setSwitching(true);
+                                            setStatusMsg('Switching model...');
+                                            try {
+                                                await api.switchPhoneModel(model);
+                                                // Wait for llama-server to restart
+                                                await new Promise(r => setTimeout(r, 6000));
+                                                fetchPhoneStatus();
+                                                setStatusMsg('Model switched!');
+                                            } catch {
+                                                setStatusMsg('Switch failed');
+                                            } finally {
+                                                setSwitching(false);
+                                                setTimeout(() => setStatusMsg(''), 3000);
+                                            }
+                                        }}
+                                        style={{
+                                            flex: 1,
+                                            background: 'var(--bg-tertiary)',
+                                            color: 'var(--text-primary)',
+                                            border: '1px solid var(--bg-tertiary)',
+                                            borderRadius: 4,
+                                            padding: '3px 6px',
+                                            fontSize: 10,
+                                            fontFamily: 'var(--font-mono)',
+                                            cursor: switching ? 'wait' : 'pointer',
+                                            opacity: switching ? 0.5 : 1,
+                                        }}
+                                    >
+                                        {phoneModels.map(m => (
+                                            <option key={m.name} value={m.name}>
+                                                {m.name} ({(m.size_mb / 1024).toFixed(1)}G)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>
-                            llama-server not reachable
+                            {switching ? 'Switching model...' : 'llama-server not reachable'}
                         </div>
                     )}
                 </div>

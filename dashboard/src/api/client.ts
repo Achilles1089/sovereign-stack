@@ -78,6 +78,12 @@ export interface PhoneStatus {
     battery_pct?: number;
 }
 
+export interface PhoneModel {
+    name: string;
+    path: string;
+    size_mb: number;
+}
+
 export interface ChatMessage {
     role: 'user' | 'assistant' | 'system';
     content: string;
@@ -97,6 +103,12 @@ export const api = {
     getModels: () => fetchJSON<{ models: AIModel[] }>('/ai/models'),
     getCatalog: () => fetchJSON<{ catalog: CatalogEntry[] }>('/ai/catalog'),
     getPhoneStatus: () => fetchJSON<PhoneStatus>('/ai/phone-status'),
+    getPhoneModels: () => fetchJSON<{ models: PhoneModel[]; active: string | null }>('/ai/phone-models'),
+    switchPhoneModel: (model: string) => fetch(API_BASE + '/ai/phone-switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
+    }).then(r => r.json()),
 
     installApp: (name: string) => fetch(API_BASE + '/apps/install', {
         method: 'POST',
