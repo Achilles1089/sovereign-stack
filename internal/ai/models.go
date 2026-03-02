@@ -20,10 +20,10 @@ var ModelCatalog = []ModelEntry{
 		URL:         "https://huggingface.co/Mungert/rwkv7-1.5B-world-GGUF/resolve/main/rwkv7-1.5B-world-q4_k_m.gguf"},
 
 	// === Qwen 2.5 — Strong transformer family ===
-	{Name: "qwen2.5-7b-q4", DisplayName: "Qwen 2.5 7B HQ", Filename: "qwen2.5-7b-instruct-q4_k_m.gguf",
-		SizeGB: 4.1, MinRAMMB: 5632, Tier: "basic", Architecture: "qwen2",
+	{Name: "qwen2.5-7b-q4", DisplayName: "Qwen 2.5 7B HQ", Filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+		SizeGB: 4.3, MinRAMMB: 5632, Tier: "basic", Architecture: "qwen2",
 		Description: "Best quality — tight fit, may need reduced context",
-		URL:         "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"},
+		URL:         "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"},
 	{Name: "qwen2.5-7b", DisplayName: "Qwen 2.5 7B", Filename: "qwen2.5-7b-instruct-q3_k_m.gguf",
 		SizeGB: 3.3, MinRAMMB: 5120, Tier: "basic", Architecture: "qwen2",
 		Description: "Largest comfortable fit — excellent quality",
