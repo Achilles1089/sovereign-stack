@@ -10,6 +10,7 @@ Endpoints:
 """
 
 import http.server
+import socketserver
 import json
 import subprocess
 import os
@@ -18,13 +19,20 @@ import signal
 import time
 import threading
 
+# Hardcode Termux paths — run-as doesn't always set HOME correctly
+TERMUX_HOME = "/data/data/com.termux/files/home"
+TERMUX_BIN = "/data/data/com.termux/files/usr/bin"
+
 PORT = int(os.environ.get("SYSINFO_PORT", "8086"))
-MODELS_DIR = os.environ.get("MODELS_DIR", os.path.expanduser("~/models"))
-LLAMA_SERVER = os.environ.get("LLAMA_SERVER", os.path.expanduser("~/llama.cpp/bld/bin/llama-server"))
+MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(TERMUX_HOME, "models"))
+LLAMA_SERVER = os.environ.get("LLAMA_SERVER", os.path.join(TERMUX_HOME, "llama.cpp/bld/bin/llama-server"))
 LLAMA_PORT = int(os.environ.get("LLAMA_PORT", "8085"))
 
 # Big core IDs for taskset (A75 cores on T616)
 BIG_CORES = os.environ.get("BIG_CORES", "6,7")
+
+# Log file for llama-server stderr (for debugging crashes)
+LLAMA_LOG = os.path.join(TERMUX_HOME, "llama-server.log")
 
 def get_prop(prop):
     try:
@@ -115,12 +123,19 @@ def switch_model(model_name):
     """Kill current llama-server and restart with the requested model."""
     model_path = os.path.join(MODELS_DIR, model_name)
     if not os.path.exists(model_path):
-        return {"ok": False, "error": f"Model not found: {model_name}"}
+        return {"ok": False, "error": f"Model not found: {model_name} (looked in {MODELS_DIR})"}
 
     # Kill existing llama-server
     try:
         subprocess.run(["killall", "llama-server"], stderr=subprocess.DEVNULL)
-        time.sleep(2)
+        time.sleep(3)
+    except Exception:
+        pass
+
+    # Double-check port is free
+    try:
+        subprocess.run(["fuser", "-k", f"{LLAMA_PORT}/tcp"], stderr=subprocess.DEVNULL)
+        time.sleep(1)
     except Exception:
         pass
 
@@ -128,19 +143,21 @@ def switch_model(model_name):
     size_mb = os.path.getsize(model_path) // (1024 * 1024)
     threads = 2  # 2 big A75 cores
 
-    # Dynamic context: with -fa + q8_0 KV cache, memory is minimal (~28MB per 1024 tokens for 7B)
-    if size_mb > 4000:      # 7B Q4 (4.3GB) — leaves ~200MB, fits 2048 ctx
+    # Dynamic context: with -fa + q8_0 KV cache, memory is minimal
+    if size_mb > 4000:
         ctx_size = 2048
-    elif size_mb > 3000:    # 7B Q3 (3.5GB), 2.9B Q8 (3.0GB)
+    elif size_mb > 3000:
         ctx_size = 2048
-    elif size_mb > 1500:    # 3B models (~2GB)
+    elif size_mb > 1500:
         ctx_size = 4096
-    else:                   # 1.5B and smaller
+    else:
         ctx_size = 4096
 
-    # Launch new server pinned to big cores
+    # Build command with full paths
+    taskset_bin = os.path.join(TERMUX_BIN, "taskset") if os.path.exists(os.path.join(TERMUX_BIN, "taskset")) else "taskset"
+
     cmd = [
-        "taskset", "-c", BIG_CORES,
+        taskset_bin, "-c", BIG_CORES,
         LLAMA_SERVER,
         "-m", model_path,
         "--host", "0.0.0.0",
@@ -150,22 +167,31 @@ def switch_model(model_name):
         "--ctx-size", str(ctx_size),
         "--batch-size", "256",
         "--ubatch-size", "128",
-        "-fa",                   # Flash attention — reduces KV cache memory
+        "-fa",
     ]
 
-    # KV cache quantization for models > 3GB — saves ~50% KV memory
+    # KV cache quantization for models > 3GB
     if size_mb > 3000:
         cmd.extend(["--cache-type-k", "q8_0", "--cache-type-v", "q8_0"])
 
     try:
+        # Log stderr to file for debugging
+        log_f = open(LLAMA_LOG, "w")
+        env = os.environ.copy()
+        env["HOME"] = TERMUX_HOME
+        env["PATH"] = TERMUX_BIN + ":" + env.get("PATH", "")
+        env["LD_LIBRARY_PATH"] = "/data/data/com.termux/files/usr/lib"
+
         proc = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True
+            cmd, stdout=subprocess.DEVNULL, stderr=log_f,
+            start_new_session=True, env=env
         )
         # Wait for startup
-        time.sleep(4)
+        time.sleep(5)
         if proc.poll() is not None:
-            return {"ok": False, "error": "llama-server exited immediately"}
+            log_f.close()
+            crash_log = read_file(LLAMA_LOG)[:500]
+            return {"ok": False, "error": f"llama-server exited (code {proc.returncode}): {crash_log}"}
         return {"ok": True, "model": model_name, "pid": proc.pid}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -212,29 +238,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # Run switch in background to avoid blocking
             def do_switch():
                 result = switch_model(model_name)
-                # Store result for status check
                 Handler._last_switch = result
 
             Handler._last_switch = {"ok": True, "model": model_name, "status": "switching"}
             t = threading.Thread(target=do_switch)
             t.start()
             self._send_json({"ok": True, "model": model_name, "status": "switching"})
+        elif self.path == "/switch-status":
+            self._send_json(getattr(Handler, '_last_switch', {"status": "idle"}))
         else:
             self._send_json({"error": "Not found"}, 404)
 
     def log_message(self, format, *args):
         pass
 
+
+class ReusableTCPServer(socketserver.TCPServer):
+    """TCP server with SO_REUSEADDR to avoid 'Address already in use'."""
+    allow_reuse_address = True
+    allow_reuse_port = True
+
+
 if __name__ == "__main__":
-    tmpdir = os.environ.get("TMPDIR", os.environ.get("HOME", "/data/data/com.termux/files/home"))
-    pidfile = os.path.join(tmpdir, "sysinfo.pid")
+    # Ensure HOME is set correctly
+    os.environ["HOME"] = TERMUX_HOME
+
+    pidfile = os.path.join(TERMUX_HOME, "sysinfo.pid")
     with open(pidfile, "w") as f:
         f.write(str(os.getpid()))
 
     print(f"  [SYSINFO] Phone hardware + model management: http://0.0.0.0:{PORT}")
     print(f"  [SYSINFO] Models dir: {MODELS_DIR}")
+    print(f"  [SYSINFO] llama-server: {LLAMA_SERVER}")
     print(f"  [SYSINFO] Big cores: {BIG_CORES}")
-    server = http.server.HTTPServer(("0.0.0.0", PORT), Handler)
+
+    server = ReusableTCPServer(("0.0.0.0", PORT), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
