@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -65,6 +66,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/ai/phone-status", s.handlePhoneStatus)
 	mux.HandleFunc("/api/ai/phone-models", s.handlePhoneModels)
 	mux.HandleFunc("/api/ai/phone-switch", s.handlePhoneSwitch)
+	mux.HandleFunc("/api/ai/phone-start", s.handlePhoneStart)
 
 	// Serve static dashboard files (SPA fallback)
 	if s.staticDir != "" {
@@ -613,6 +615,70 @@ func (s *Server) handlePhoneSwitch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write(respBody)
+}
+
+// handlePhoneStart uses ADB to start llama-server and sysinfo on the USB-connected phone
+func (s *Server) handlePhoneStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(200)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse optional model name from request body
+	var req struct {
+		Model string `json:"model"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req.Model == "" {
+		req.Model = "rwkv7-2.9B-world-q4_k_m.gguf" // default
+	}
+
+	// Step 1: Check ADB device
+	out, err := exec.Command("adb", "devices").CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "device") {
+		writeJSON(w, map[string]interface{}{"ok": false, "error": "No phone connected via USB", "detail": string(out)})
+		return
+	}
+
+	// Step 2: Set up ADB port forwarding
+	exec.Command("adb", "forward", "tcp:8085", "tcp:8085").Run()
+	exec.Command("adb", "forward", "tcp:8086", "tcp:8086").Run()
+
+	// Step 3: Start sysinfo_server.py
+	sysinfoCmd := `export PATH=/data/data/com.termux/files/usr/bin:$PATH; ` +
+		`export LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib; ` +
+		`export HOME=/data/data/com.termux/files/home; ` +
+		`export TMPDIR=$HOME/tmp; mkdir -p $TMPDIR; ` +
+		`pkill -f sysinfo_server 2>/dev/null; sleep 1; ` +
+		`nohup python3 $HOME/sysinfo_server.py > /dev/null 2>&1 &`
+	exec.Command("adb", "shell", "run-as", "com.termux", "sh", "-c", sysinfoCmd).Run()
+
+	// Step 4: Start llama-server with optimized flags
+	llamaCmd := fmt.Sprintf(
+		`export PATH=/data/data/com.termux/files/usr/bin:$PATH; `+
+			`export LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib; `+
+			`export HOME=/data/data/com.termux/files/home; `+
+			`killall llama-server 2>/dev/null; sleep 2; `+
+			`nohup taskset -c 6,7 $HOME/llama.cpp/bld/bin/llama-server `+
+			`-m $HOME/models/%s `+
+			`--host 0.0.0.0 --port 8085 `+
+			`--threads 2 --parallel 1 --ctx-size 2048 `+
+			`--batch-size 512 --ubatch-size 256 `+
+			`> /dev/null 2>&1 &`,
+		req.Model,
+	)
+	exec.Command("adb", "shell", "run-as", "com.termux", "sh", "-c", llamaCmd).Run()
+
+	writeJSON(w, map[string]interface{}{"ok": true, "model": req.Model, "status": "starting"})
 }
 
 // deriveModelDisplayName converts a GGUF filename/model ID into a readable display name

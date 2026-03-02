@@ -109,6 +109,11 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model }),
     }).then(r => r.json()),
+    startPhone: (model?: string) => fetch(API_BASE + '/ai/phone-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: model || '' }),
+    }).then(r => r.json()),
 
     installApp: (name: string) => fetch(API_BASE + '/apps/install', {
         method: 'POST',

@@ -476,8 +476,34 @@ export default function AI() {
                             )}
                         </div>
                     ) : (
-                        <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>
-                            {switching ? 'Switching model...' : 'llama-server not reachable'}
+                        <div style={{ marginTop: 8 }}>
+                            <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 8 }}>
+                                {switching ? 'Starting AI engine...' : 'llama-server not reachable'}
+                            </div>
+                            {!switching && (
+                                <button
+                                    className="btn btn-sm btn-primary"
+                                    style={{ fontSize: 11, padding: '4px 12px', width: '100%' }}
+                                    onClick={async () => {
+                                        setSwitching(true);
+                                        setStatusMsg('Starting AI engine via USB...');
+                                        try {
+                                            await api.startPhone();
+                                            // Wait for llama-server to boot
+                                            await new Promise(r => setTimeout(r, 8000));
+                                            fetchPhoneStatus();
+                                            setStatusMsg('AI engine started!');
+                                        } catch {
+                                            setStatusMsg('Failed to start');
+                                        } finally {
+                                            setSwitching(false);
+                                            setTimeout(() => setStatusMsg(''), 3000);
+                                        }
+                                    }}
+                                >
+                                    ▶ Start AI Engine
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
