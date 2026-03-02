@@ -340,47 +340,55 @@ export default function AI() {
                     </div>
                 )}
 
-                <div className="chat-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <div className="card-title" style={{ marginBottom: 0 }}>AI Chat</div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                                {phoneStatus?.running ? <><span className="status-dot up" /> Online</> : <><span className="status-dot down" /> Offline</>}
-                            </span>
+                <div className="terminal-chat">
+                    <div className="terminal-header">
+                        <span className="terminal-header-title">SOVEREIGN-OS v1.0 ─── {phoneStatus?.running ? 'READY' : 'OFFLINE'}</span>
+                        <div className="terminal-header-status">
                             {phoneStatus?.running && (
-                                <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                                    {phoneStatus.display_name || phoneStatus.model}
-                                </span>
+                                <span style={{ color: '#33ff33' }}>{phoneStatus.display_name || phoneStatus.model}</span>
                             )}
+                            <span className={`terminal-dot ${phoneStatus?.running ? 'on' : 'off'}`} />
                         </div>
                     </div>
 
                     <div className="chat-messages">
-                        {messages.map((msg, i) => (
-                            <div key={i} className={`chat-message ${msg.role}`}>
-                                <div className="chat-bubble">{msg.content || '...'}</div>
-                            </div>
-                        ))}
+                        {messages.map((msg, i) => {
+                            const isStreaming = isLoading && msg.role === 'assistant' && i === messages.length - 1;
+                            return (
+                                <div key={i} className={`chat-message ${msg.role}`}>
+                                    <div className="chat-bubble">
+                                        {msg.role === 'user' ? (
+                                            <><span className="terminal-prompt">{'> '}</span>{msg.content}</>
+                                        ) : (
+                                            <>{msg.content || '...'}{isStreaming && <span className="terminal-cursor" />}</>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                         {isLoading && messages[messages.length - 1]?.content === '' && (
                             <div className="chat-message assistant">
-                                <div className="chat-bubble" style={{ color: 'var(--text-muted)' }}>Thinking...</div>
+                                <div className="chat-bubble" style={{ color: '#1a8a1a' }}>
+                                    Processing<span className="terminal-cursor" />
+                                </div>
                             </div>
                         )}
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="chat-input-container">
+                    <div className="terminal-input-container">
+                        <span className="terminal-input-prefix">C:\&gt;&nbsp;</span>
                         <input
                             className="chat-input"
-                            placeholder={phoneStatus?.running ? `Chat with ${phoneStatus.display_name || phoneStatus.model}...` : 'Waiting for llama-server...'}
+                            placeholder={phoneStatus?.running ? 'enter command...' : 'waiting for system...'}
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSend()}
                             disabled={isLoading || !phoneStatus?.running}
                         />
-                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || !phoneStatus?.running}>Send</button>
+                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || !phoneStatus?.running}>SEND</button>
                         {isLoading && (
-                            <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ Stop</button>
+                            <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ STOP</button>
                         )}
                     </div>
                 </div>

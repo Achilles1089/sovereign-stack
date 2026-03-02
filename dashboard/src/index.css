@@ -866,3 +866,240 @@ code,
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-sm);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   DOS TERMINAL CHAT — Retro CRT look
+   ═══════════════════════════════════════════════════════════ */
+
+.terminal-chat {
+  background: #000000;
+  border: 2px solid #33ff33;
+  border-radius: 4px;
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(51, 255, 51, 0.08), inset 0 0 60px rgba(0, 0, 0, 0.5);
+  font-family: "IBM Plex Mono", "Courier New", "Lucida Console", monospace;
+}
+
+/* Scanline overlay */
+.terminal-chat::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.15) 2px,
+      rgba(0, 0, 0, 0.15) 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Terminal header bar */
+.terminal-header {
+  background: #1a1a1a;
+  border-bottom: 1px solid #33ff33;
+  padding: 6px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 2;
+  position: relative;
+}
+
+.terminal-header-title {
+  color: #33ff33;
+  font-size: 11px;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.terminal-header-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+}
+
+.terminal-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.terminal-dot.on {
+  background: #33ff33;
+  box-shadow: 0 0 6px #33ff33;
+}
+
+.terminal-dot.off {
+  background: #ff3333;
+  box-shadow: 0 0 6px #ff3333;
+}
+
+/* Messages area */
+.terminal-chat .chat-messages {
+  background: #000000;
+  padding: 12px 16px;
+  gap: 4px;
+  z-index: 2;
+  position: relative;
+}
+
+/* Override bubble styles — raw terminal text */
+.terminal-chat .chat-message {
+  max-width: 100%;
+  gap: 0;
+}
+
+.terminal-chat .chat-message.user {
+  align-self: flex-start;
+  flex-direction: row;
+}
+
+.terminal-chat .chat-message.assistant {
+  align-self: flex-start;
+}
+
+.terminal-chat .chat-bubble {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 2px 0;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #33ff33;
+  text-shadow: 0 0 4px rgba(51, 255, 51, 0.3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.terminal-chat .chat-message.user .chat-bubble {
+  color: #ffffff;
+}
+
+/* User prompt prefix */
+.terminal-prompt {
+  color: #aaaaaa;
+  user-select: none;
+}
+
+/* Blinking cursor */
+@keyframes cursor-blink {
+
+  0%,
+  49% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  background: #33ff33;
+  animation: cursor-blink 1s step-end infinite;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  box-shadow: 0 0 4px rgba(51, 255, 51, 0.5);
+}
+
+/* Terminal input prompt */
+.terminal-input-container {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 8px 16px 12px;
+  border-top: 1px solid #1a3a1a;
+  z-index: 2;
+  position: relative;
+  background: #000000;
+}
+
+.terminal-input-prefix {
+  color: #aaaaaa;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 13px;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.terminal-chat .chat-input {
+  background: transparent;
+  border: none;
+  color: #33ff33;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 13px;
+  padding: 4px 8px;
+  caret-color: #33ff33;
+  text-shadow: 0 0 4px rgba(51, 255, 51, 0.3);
+  outline: none;
+  flex: 1;
+}
+
+.terminal-chat .chat-input::placeholder {
+  color: #1a5a1a;
+}
+
+.terminal-chat .chat-input:focus {
+  border-color: transparent;
+}
+
+/* Send button */
+.terminal-chat .btn-primary {
+  background: transparent;
+  border: 1px solid #33ff33;
+  color: #33ff33;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.terminal-chat .btn-primary:hover {
+  background: rgba(51, 255, 51, 0.1);
+  box-shadow: 0 0 8px rgba(51, 255, 51, 0.2);
+}
+
+.terminal-chat .btn-danger {
+  background: transparent;
+  border: 1px solid #ff3333;
+  color: #ff3333;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 2px;
+}
+
+/* Thinking animation in terminal */
+.terminal-chat .chat-bubble[style*="color: var(--text-muted)"] {
+  color: #1a8a1a !important;
+}
+
+/* Boot message styling */
+.terminal-boot-msg {
+  color: #1a8a1a;
+  font-size: 11px;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  padding: 2px 0;
+}
