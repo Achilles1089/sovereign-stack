@@ -162,7 +162,7 @@ func checkDocker(pinfo *platform.Info) error {
 
 func printSummary(cfg *config.Config, pinfo *platform.Info) {
 	fmt.Println("  ┌─────────────────────────────────────────────┐")
-	fmt.Println("  │         🏰 Sovereign Stack is Ready         │")
+	fmt.Println("  |         Sovereign Stack is Ready           |")
 	fmt.Println("  ├─────────────────────────────────────────────┤")
 	fmt.Printf("  │  Platform:  %-31s │\n", pinfo)
 	fmt.Printf("  │  AI Model:  %-31s │\n", cfg.AI.DefaultModel)

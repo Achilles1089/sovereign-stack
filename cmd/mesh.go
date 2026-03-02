@@ -107,7 +107,7 @@ func runMeshJoin(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	for _, peer := range cfg.Peers {
-		fmt.Printf("  📡 %s (%s) → %s\n", peer.Name, peer.Endpoint, peer.MeshIP)
+		fmt.Printf("  [PEER] %s (%s) -> %s\n", peer.Name, peer.Endpoint, peer.MeshIP)
 	}
 
 	fmt.Println()
@@ -138,7 +138,7 @@ func runMeshStatus(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("  Connected peers (%d):\n", len(cfg.Peers))
 		for _, peer := range cfg.Peers {
-			fmt.Printf("    📡 %s — %s (%s)\n", peer.Name, peer.MeshIP, peer.Endpoint)
+			fmt.Printf("    [PEER] %s -- %s (%s)\n", peer.Name, peer.MeshIP, peer.Endpoint)
 		}
 	}
 

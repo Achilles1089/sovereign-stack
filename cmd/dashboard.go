@@ -47,8 +47,8 @@ func runDashboard(cmd *cobra.Command, args []string) error {
 	}
 	srv.SetStaticDir(staticDir)
 
-	fmt.Printf("  🌐 Dashboard: http://%s\n", addr)
-	fmt.Printf("  📡 API:       http://%s/api/\n", addr)
+	fmt.Printf("  [WEB] Dashboard: http://%s\n", addr)
+	fmt.Printf("  [API] API:       http://%s/api/\n", addr)
 	fmt.Println()
 	fmt.Println("  Press Ctrl+C to stop")
 	fmt.Println()

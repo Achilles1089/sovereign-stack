@@ -57,9 +57,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(w, "  ───────\t──────\t─────\t─────")
 
 	for _, s := range services {
-		status := "🔴 Down"
+		status := "[DOWN] Down"
 		if s.Running {
-			status = "🟢 Up"
+			status = "[UP] Up"
 		}
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", s.Name, status, s.Image, s.Ports)
 	}

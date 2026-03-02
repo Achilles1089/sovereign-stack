@@ -94,7 +94,7 @@ func runAIStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Engine:        llama-server\n")
 
 	if client.IsRunning() {
-		fmt.Println("  llama-server:  🟢 Running")
+		fmt.Println("  llama-server:  [UP] Running")
 
 		models, err := client.ListModels()
 		if err == nil {
@@ -105,7 +105,7 @@ func runAIStatus(cmd *cobra.Command, args []string) error {
 			}
 		}
 	} else {
-		fmt.Println("  llama-server:  🔴 Not reachable")
+		fmt.Println("  llama-server:  [DOWN] Not reachable")
 		fmt.Println()
 		fmt.Println("  Start with: llama-server -m <model.gguf> --host 0.0.0.0 --port 8085")
 	}
@@ -171,7 +171,7 @@ func runAIChat(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		if input == "exit" || input == "quit" {
-			fmt.Println("  Goodbye! 👋")
+			fmt.Println("  Goodbye!")
 			break
 		}
 

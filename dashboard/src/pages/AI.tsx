@@ -110,7 +110,7 @@ export default function AI() {
             } else {
                 setMessages(prev => {
                     const updated = [...prev];
-                    updated[updated.length - 1] = { role: 'assistant', content: '⚠️ Could not reach llama-server. Is it running?' };
+                    updated[updated.length - 1] = { role: 'assistant', content: '[!] Could not reach llama-server. Is it running?' };
                     return updated;
                 });
             }
@@ -148,11 +148,11 @@ export default function AI() {
                 setPullProgress(text.trim().split('\n').pop() || '');
             });
             setPullProgress('');
-            setStatusMsg(`✅ ${modelName} pulled!`);
+            setStatusMsg(`[OK] ${modelName} pulled!`);
             fetchModels();
             if (!activeModel) setActiveModel(modelName);
         } catch {
-            setStatusMsg(`⚠️ Failed to pull ${modelName}`);
+            setStatusMsg(`[!] Failed to pull ${modelName}`);
         }
         setPulling(null);
         setTimeout(() => setStatusMsg(''), 4000);
@@ -162,13 +162,13 @@ export default function AI() {
         if (!confirm(`Delete ${modelName}?`)) return;
         try {
             const res = await api.deleteModel(modelName);
-            if (res.error) { setStatusMsg(`⚠️ ${res.error}`); }
+            if (res.error) { setStatusMsg(`[!] ${res.error}`); }
             else {
-                setStatusMsg(`✅ ${modelName} deleted`);
+                setStatusMsg(`[OK] ${modelName} deleted`);
                 fetchModels();
                 if (activeModel === modelName) setActiveModel(models.find(m => m.name !== modelName)?.name || '');
             }
-        } catch { setStatusMsg('⚠️ Delete failed'); }
+        } catch { setStatusMsg('[!] Delete failed'); }
         setTimeout(() => setStatusMsg(''), 4000);
     };
 
@@ -274,9 +274,9 @@ export default function AI() {
                 {/* AI Engine — Phone Status */}
                 <div className="card compact">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="card-title" style={{ marginBottom: 0 }}>📱 AI Engine</div>
+                        <div className="card-title" style={{ marginBottom: 0 }}>AI Engine</div>
                         <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                            {phoneStatus?.running ? '🟢' : '🔴'}
+                            {phoneStatus?.running ? <span className="status-dot up" /> : <span className="status-dot down" />}
                         </span>
                     </div>
                     {phoneStatus?.running ? (
@@ -313,8 +313,8 @@ export default function AI() {
                 {statusMsg && (
                     <div style={{
                         padding: '6px 12px', marginBottom: 12, borderRadius: 8, fontSize: 12,
-                        background: statusMsg.startsWith('✅') ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.12)',
-                        border: `1px solid ${statusMsg.startsWith('✅') ? 'rgba(34,197,94,0.25)' : 'rgba(234,179,8,0.25)'}`,
+                        background: statusMsg.startsWith('[OK]') ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.12)',
+                        border: `1px solid ${statusMsg.startsWith('[OK]') ? 'rgba(34,197,94,0.25)' : 'rgba(234,179,8,0.25)'}`,
                     }}>
                         {statusMsg}
                     </div>
@@ -325,7 +325,7 @@ export default function AI() {
                         <div className="card-title" style={{ marginBottom: 0 }}>AI Chat</div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <span className={`badge badge-sm ${aiStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                                {aiStatus?.running ? '🟢 Online' : '🔴 Offline'}
+                                {aiStatus?.running ? <><span className="status-dot up" /> Online</> : <><span className="status-dot down" /> Offline</>}
                             </span>
                             {models.length > 0 && (
                                 <select
@@ -437,7 +437,7 @@ export default function AI() {
                                             disabled={!!pulling}
                                             style={{ fontSize: 10, padding: '2px 8px' }}
                                         >
-                                            {pulling === m.name ? '⏳' : 'Pull'}
+                                            {pulling === m.name ? '...' : 'Pull'}
                                         </button>
                                     )}
                                 </div>
@@ -449,7 +449,7 @@ export default function AI() {
                             marginTop: 8, padding: '4px 8px', background: 'var(--bg-secondary)',
                             borderRadius: 6, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)',
                         }}>
-                            ⏳ {pullProgress || 'Connecting...'}
+                            Pulling: {pullProgress || 'Connecting...'}
                         </div>
                     )}
                 </div>
