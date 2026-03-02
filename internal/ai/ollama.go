@@ -363,7 +363,7 @@ func (c *Client) SwitchModel(modelName string) error {
 		"-c", "2048",
 		"--batch-size", "256",
 		"--ubatch-size", "128",
-		"-fa",
+		"--flash-attn", "on",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

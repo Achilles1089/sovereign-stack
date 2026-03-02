@@ -167,7 +167,7 @@ def switch_model(model_name):
         "--ctx-size", str(ctx_size),
         "--batch-size", "256",
         "--ubatch-size", "128",
-        "-fa",
+        "--flash-attn", "on",
     ]
 
     # KV cache quantization for models > 3GB

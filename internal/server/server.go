@@ -673,7 +673,7 @@ func (s *Server) handlePhoneStart(w http.ResponseWriter, r *http.Request) {
 			`--host 0.0.0.0 --port 8085 `+
 			`--threads 2 --parallel 1 --ctx-size 2048 `+
 			`--batch-size 256 --ubatch-size 128 `+
-			`-fa `+
+			`--flash-attn on `+
 			`> /dev/null 2>&1 &`,
 		req.Model,
 	)
