@@ -886,7 +886,7 @@ code,
   font-family: "IBM Plex Mono", "Courier New", "Lucida Console", monospace;
 }
 
-/* Scanline overlay */
+/* Scanline overlay + CRT flicker */
 .terminal-chat::before {
   content: "";
   position: absolute;
@@ -901,12 +901,37 @@ code,
       rgba(0, 0, 0, 0.15) 4px);
   pointer-events: none;
   z-index: 1;
+  animation: crt-flicker 8s infinite;
+}
+
+@keyframes crt-flicker {
+
+  0%,
+  95% {
+    opacity: 1;
+  }
+
+  96% {
+    opacity: 0.97;
+  }
+
+  97% {
+    opacity: 1;
+  }
+
+  98% {
+    opacity: 0.96;
+  }
+
+  99% {
+    opacity: 1;
+  }
 }
 
 /* Terminal header bar */
 .terminal-header {
   background: #1a1a1a;
-  border-bottom: 1px solid #33ff33;
+  border-bottom: 1px solid var(--crt-main, #33ff33);
   padding: 6px 12px;
   display: flex;
   justify-content: space-between;
@@ -916,7 +941,7 @@ code,
 }
 
 .terminal-header-title {
-  color: #33ff33;
+  color: var(--crt-main, #33ff33);
   font-size: 11px;
   font-family: "IBM Plex Mono", "Courier New", monospace;
   letter-spacing: 1px;
@@ -1098,8 +1123,15 @@ code,
 
 /* Boot message styling */
 .terminal-boot-msg {
-  color: #1a8a1a;
+  color: var(--crt-dim, #1a8a1a);
   font-size: 11px;
   font-family: "IBM Plex Mono", "Courier New", monospace;
   padding: 2px 0;
+}
+
+/* System messages (boot, command output) */
+.terminal-system-msg {
+  color: var(--crt-dim, #1a8a1a) !important;
+  font-size: 12px !important;
+  opacity: 0.85;
 }
