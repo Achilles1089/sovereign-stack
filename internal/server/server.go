@@ -662,7 +662,7 @@ func (s *Server) handlePhoneStart(w http.ResponseWriter, r *http.Request) {
 		`nohup python3 $HOME/sysinfo_server.py > /dev/null 2>&1 &`
 	exec.Command("adb", "shell", "run-as", "com.termux", "sh", "-c", sysinfoCmd).Run()
 
-	// Step 4: Start llama-server with optimized flags
+	// Step 4: Start llama-server with optimized flags for T616 (2x A75 big + 6x A55 little)
 	llamaCmd := fmt.Sprintf(
 		`export PATH=/data/data/com.termux/files/usr/bin:$PATH; `+
 			`export LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib; `+
@@ -672,7 +672,8 @@ func (s *Server) handlePhoneStart(w http.ResponseWriter, r *http.Request) {
 			`-m $HOME/models/%s `+
 			`--host 0.0.0.0 --port 8085 `+
 			`--threads 2 --parallel 1 --ctx-size 2048 `+
-			`--batch-size 512 --ubatch-size 256 `+
+			`--batch-size 256 --ubatch-size 128 `+
+			`-fa `+
 			`> /dev/null 2>&1 &`,
 		req.Model,
 	)

@@ -124,9 +124,19 @@ def switch_model(model_name):
     except Exception:
         pass
 
-    # Determine thread count based on model size
+    # Optimize flags based on model size — T616 has 6GB RAM, ~4.5GB usable
     size_mb = os.path.getsize(model_path) // (1024 * 1024)
-    threads = 2  # default for big cores
+    threads = 2  # 2 big A75 cores
+
+    # Dynamic context: large models get smaller context to fit in RAM
+    if size_mb > 4000:      # 7B Q4 (4.3GB) — very tight
+        ctx_size = 512
+    elif size_mb > 3000:    # 7B Q3 (3.5GB), 2.9B Q8 (3.0GB)
+        ctx_size = 1024
+    elif size_mb > 1500:    # 3B models (~2GB)
+        ctx_size = 2048
+    else:                   # 1.5B and smaller
+        ctx_size = 4096
 
     # Launch new server pinned to big cores
     cmd = [
@@ -137,10 +147,15 @@ def switch_model(model_name):
         "--port", str(LLAMA_PORT),
         "--threads", str(threads),
         "--parallel", "1",
-        "--ctx-size", "2048",
-        "--batch-size", "512",
-        "--ubatch-size", "256",
+        "--ctx-size", str(ctx_size),
+        "--batch-size", "256",
+        "--ubatch-size", "128",
+        "-fa",                   # Flash attention — reduces KV cache memory
     ]
+
+    # KV cache quantization for models > 3GB — saves ~50% KV memory
+    if size_mb > 3000:
+        cmd.extend(["--cache-type-k", "q8_0", "--cache-type-v", "q8_0"])
 
     try:
         proc = subprocess.Popen(

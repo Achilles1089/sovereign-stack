@@ -354,13 +354,16 @@ func (c *Client) SwitchModel(modelName string) error {
 	exec.Command("pkill", "-f", "llama-server").Run()
 	time.Sleep(1 * time.Second)
 
-	// Start new llama-server with the model
+	// Start new llama-server with optimized flags
 	cmd := exec.Command(c.ServerBin,
 		"-m", modelPath,
 		"--host", "0.0.0.0",
 		"--port", extractPort(c.Host),
-		"-t", "8",
+		"-t", "4",
 		"-c", "2048",
+		"--batch-size", "256",
+		"--ubatch-size", "128",
+		"-fa",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
