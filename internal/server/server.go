@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Achilles1089/sovereign-stack/internal/ai"
 	"github.com/Achilles1089/sovereign-stack/internal/apps"
@@ -483,7 +484,8 @@ func (s *Server) handlePhoneStatus(w http.ResponseWriter, r *http.Request) {
 	model := result.Data[0]
 	displayName := deriveModelDisplayName(model.ID)
 
-	writeJSON(w, map[string]interface{}{
+	// Build base response
+	response := map[string]interface{}{
 		"running":      true,
 		"model":        model.ID,
 		"display_name": displayName,
@@ -492,7 +494,60 @@ func (s *Server) handlePhoneStatus(w http.ResponseWriter, r *http.Request) {
 		"context":      model.Meta.NCtxTrain,
 		"size_bytes":   model.Meta.Size,
 		"engine":       "llama-server",
-	})
+	}
+
+	// Try to get phone hardware from sysinfo companion (same host, port 8086)
+	phoneHW := fetchPhoneHardware(s.client.Host)
+	if phoneHW != nil {
+		response["phone_model"] = phoneHW.PhoneModel
+		response["soc"] = phoneHW.SoC
+		response["android_version"] = phoneHW.AndroidVersion
+		response["phone_cpu_cores"] = phoneHW.CPUCores
+		response["phone_ram_total_mb"] = phoneHW.RAMTotalMB
+		response["phone_ram_available_mb"] = phoneHW.RAMAvailableMB
+		response["phone_storage_free_gb"] = phoneHW.StorageFreeGB
+		response["battery_pct"] = phoneHW.BatteryPct
+	}
+
+	writeJSON(w, response)
+}
+
+// phoneHardwareInfo holds hardware data from the sysinfo companion
+type phoneHardwareInfo struct {
+	PhoneModel     string `json:"phone_model"`
+	SoC            string `json:"soc"`
+	AndroidVersion string `json:"android_version"`
+	CPUCores       int    `json:"cpu_cores"`
+	CPUFreqMHz     int    `json:"cpu_freq_mhz"`
+	RAMTotalMB     int    `json:"ram_total_mb"`
+	RAMAvailableMB int    `json:"ram_available_mb"`
+	StorageTotalGB int    `json:"storage_total_gb"`
+	StorageFreeGB  int    `json:"storage_free_gb"`
+	BatteryPct     int    `json:"battery_pct"`
+}
+
+// fetchPhoneHardware queries the sysinfo companion endpoint on port 8086
+func fetchPhoneHardware(llamaHost string) *phoneHardwareInfo {
+	// Extract host IP from llama-server address (e.g., "192.168.1.100:8085" -> "192.168.1.100")
+	host := llamaHost
+	if idx := strings.LastIndex(host, ":"); idx >= 0 {
+		host = host[:idx]
+	}
+
+	sysinfoURL := fmt.Sprintf("http://%s:8086", host)
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(sysinfoURL)
+	if err != nil {
+		return nil // sysinfo companion not running -- graceful fallback
+	}
+	defer resp.Body.Close()
+
+	var hw phoneHardwareInfo
+	if err := json.NewDecoder(resp.Body).Decode(&hw); err != nil {
+		return nil
+	}
+	return &hw
 }
 
 // deriveModelDisplayName converts a GGUF filename/model ID into a readable display name

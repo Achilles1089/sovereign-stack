@@ -67,6 +67,15 @@ export interface PhoneStatus {
     size_bytes: number;
     engine: string;
     running: boolean;
+    // Phone hardware (from sysinfo companion)
+    phone_model?: string;
+    soc?: string;
+    android_version?: string;
+    phone_cpu_cores?: number;
+    phone_ram_total_mb?: number;
+    phone_ram_available_mb?: number;
+    phone_storage_free_gb?: number;
+    battery_pct?: number;
 }
 
 export interface ChatMessage {

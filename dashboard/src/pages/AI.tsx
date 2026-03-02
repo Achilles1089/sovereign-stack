@@ -299,6 +299,41 @@ export default function AI() {
                                 <span style={{ color: 'var(--text-muted)' }}>Engine</span>
                                 <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
                             </div>
+                            {phoneStatus.phone_model && (
+                                <>
+                                    <div style={{ borderTop: '1px solid var(--bg-tertiary)', margin: '6px 0', opacity: 0.3 }} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>Device</span>
+                                        <span className="mono" style={{ fontSize: 11, color: 'var(--accent-cyan)' }}>{phoneStatus.phone_model}</span>
+                                    </div>
+                                    {phoneStatus.soc && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span style={{ color: 'var(--text-muted)' }}>SoC</span>
+                                            <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.soc}</span>
+                                        </div>
+                                    )}
+                                    {phoneStatus.phone_ram_total_mb && phoneStatus.phone_ram_total_mb > 0 && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span style={{ color: 'var(--text-muted)' }}>Phone RAM</span>
+                                            <span className="mono" style={{ fontSize: 11 }}>
+                                                {(phoneStatus.phone_ram_total_mb / 1024).toFixed(1)}G
+                                            </span>
+                                        </div>
+                                    )}
+                                    {phoneStatus.battery_pct != null && phoneStatus.battery_pct >= 0 && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span style={{ color: 'var(--text-muted)' }}>Battery</span>
+                                            <span className="mono" style={{
+                                                fontSize: 11,
+                                                color: phoneStatus.battery_pct > 50 ? 'var(--accent-green)' :
+                                                    phoneStatus.battery_pct > 20 ? 'var(--accent-primary)' : 'var(--accent-red)'
+                                            }}>
+                                                {phoneStatus.battery_pct}%
+                                            </span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
                     ) : (
                         <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>
