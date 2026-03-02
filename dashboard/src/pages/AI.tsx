@@ -88,7 +88,7 @@ export default function AI() {
             chatMessages.push({ role: 'user' as const, content: input });
             // Limit context to last 10 messages — phone CPU prefill is slow on long history
             const contextWindow = chatMessages.slice(-10);
-            await api.chat(activeModel, contextWindow, (chunk) => {
+            await api.chat(phoneStatus?.model || '', contextWindow, (chunk) => {
                 // Buffer chunks and batch state updates via requestAnimationFrame
                 chunkBufferRef.current += chunk;
                 if (!rafRef.current) {
@@ -349,16 +349,32 @@ export default function AI() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <div className="card-title" style={{ marginBottom: 0 }}>AI Chat</div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <span className={`badge badge-sm ${aiStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                                {aiStatus?.running ? <><span className="status-dot up" /> Online</> : <><span className="status-dot down" /> Offline</>}
+                            <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
+                                {phoneStatus?.running ? <><span className="status-dot up" /> Online</> : <><span className="status-dot down" /> Offline</>}
                             </span>
-                            {models.length > 0 && (
+                            {phoneModels.length > 0 && (
                                 <select
-                                    value={activeModel}
-                                    onChange={e => setActiveModel(e.target.value)}
+                                    value={phoneStatus?.model || ''}
+                                    onChange={async (e) => {
+                                        const model = e.target.value;
+                                        setSwitching(true);
+                                        setStatusMsg('Switching model...');
+                                        try {
+                                            await api.switchPhoneModel(model);
+                                            await new Promise(r => setTimeout(r, 6000));
+                                            fetchPhoneStatus();
+                                            setStatusMsg('Model switched!');
+                                        } catch {
+                                            setStatusMsg('Switch failed');
+                                        } finally {
+                                            setSwitching(false);
+                                            setTimeout(() => setStatusMsg(''), 3000);
+                                        }
+                                    }}
+                                    disabled={switching}
                                     className="model-select"
                                 >
-                                    {models.map(m => (
+                                    {phoneModels.map(m => (
                                         <option key={m.name} value={m.name}>{m.name}</option>
                                     ))}
                                 </select>
@@ -383,13 +399,13 @@ export default function AI() {
                     <div className="chat-input-container">
                         <input
                             className="chat-input"
-                            placeholder={activeModel ? `Chat with ${activeModel}...` : 'Waiting for llama-server...'}
+                            placeholder={phoneStatus?.running ? `Chat with ${phoneStatus.display_name || phoneStatus.model}...` : 'Waiting for llama-server...'}
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSend()}
-                            disabled={isLoading || !aiStatus?.running}
+                            disabled={isLoading || !phoneStatus?.running}
                         />
-                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || !aiStatus?.running}>Send</button>
+                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || !phoneStatus?.running}>Send</button>
                         {isLoading && (
                             <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ Stop</button>
                         )}
