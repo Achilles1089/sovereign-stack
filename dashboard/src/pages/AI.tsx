@@ -175,11 +175,6 @@ export default function AI() {
         setTimeout(() => setStatusMsg(''), 4000);
     };
 
-    const formatSize = (bytes: number) => {
-        const gb = bytes / (1024 * 1024 * 1024);
-        return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-    };
-
     const formatParams = (params: number) => {
         if (params >= 1e9) return `${(params / 1e9).toFixed(2)}B`;
         if (params >= 1e6) return `${(params / 1e6).toFixed(0)}M`;
@@ -352,32 +347,10 @@ export default function AI() {
                             <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
                                 {phoneStatus?.running ? <><span className="status-dot up" /> Online</> : <><span className="status-dot down" /> Offline</>}
                             </span>
-                            {phoneModels.length > 0 && (
-                                <select
-                                    value={phoneStatus?.model || ''}
-                                    onChange={async (e) => {
-                                        const model = e.target.value;
-                                        setSwitching(true);
-                                        setStatusMsg('Switching model...');
-                                        try {
-                                            await api.switchPhoneModel(model);
-                                            await new Promise(r => setTimeout(r, 6000));
-                                            fetchPhoneStatus();
-                                            setStatusMsg('Model switched!');
-                                        } catch {
-                                            setStatusMsg('Switch failed');
-                                        } finally {
-                                            setSwitching(false);
-                                            setTimeout(() => setStatusMsg(''), 3000);
-                                        }
-                                    }}
-                                    disabled={switching}
-                                    className="model-select"
-                                >
-                                    {phoneModels.map(m => (
-                                        <option key={m.name} value={m.name}>{m.name}</option>
-                                    ))}
-                                </select>
+                            {phoneStatus?.running && (
+                                <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                    {phoneStatus.display_name || phoneStatus.model}
+                                </span>
                             )}
                         </div>
                     </div>
@@ -443,53 +416,7 @@ export default function AI() {
                                 <span style={{ color: 'var(--text-muted)' }}>Engine</span>
                                 <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
                             </div>
-                            {phoneModels.length > 1 && (
-                                <div style={{ borderTop: '1px solid var(--bg-tertiary)', margin: '8px 0 4px', opacity: 0.3 }} />
-                            )}
-                            {phoneModels.length > 1 && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ color: 'var(--text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>Switch</span>
-                                    <select
-                                        value={phoneStatus.model}
-                                        disabled={switching}
-                                        onChange={async (e) => {
-                                            const model = e.target.value;
-                                            setSwitching(true);
-                                            setStatusMsg('Switching model...');
-                                            try {
-                                                await api.switchPhoneModel(model);
-                                                // Wait for llama-server to restart
-                                                await new Promise(r => setTimeout(r, 6000));
-                                                fetchPhoneStatus();
-                                                setStatusMsg('Model switched!');
-                                            } catch {
-                                                setStatusMsg('Switch failed');
-                                            } finally {
-                                                setSwitching(false);
-                                                setTimeout(() => setStatusMsg(''), 3000);
-                                            }
-                                        }}
-                                        style={{
-                                            flex: 1,
-                                            background: 'var(--bg-tertiary)',
-                                            color: 'var(--text-primary)',
-                                            border: '1px solid var(--bg-tertiary)',
-                                            borderRadius: 4,
-                                            padding: '3px 6px',
-                                            fontSize: 10,
-                                            fontFamily: 'var(--font-mono)',
-                                            cursor: switching ? 'wait' : 'pointer',
-                                            opacity: switching ? 0.5 : 1,
-                                        }}
-                                    >
-                                        {phoneModels.map(m => (
-                                            <option key={m.name} value={m.name}>
-                                                {m.name} ({(m.size_mb / 1024).toFixed(1)}G)
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+
                         </div>
                     ) : (
                         <div style={{ marginTop: 8 }}>
@@ -526,34 +453,53 @@ export default function AI() {
 
                 <div className="card compact">
                     <div className="card-title">Installed Models</div>
-                    {models.length === 0 ? (
-                        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No models. Pull one below.</div>
+                    {phoneModels.length === 0 ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No models on phone. Pull one below.</div>
                     ) : (
                         <div className="model-list">
-                            {models.map(m => (
-                                <div key={m.name} className={`model-row ${activeModel === m.name ? 'active' : ''}`}>
-                                    <div>
-                                        <div className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{m.name}</div>
-                                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{formatSize(m.size)}</div>
+                            {phoneModels.map(m => {
+                                const isActive = phoneStatus?.model === m.name;
+                                const displayName = catalog.find(c => c.filename === m.name)?.display_name || m.name.replace('.gguf', '');
+                                return (
+                                    <div key={m.name} className={`model-row ${isActive ? 'active' : ''}`}>
+                                        <div>
+                                            <div className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{displayName}</div>
+                                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(m.size_mb / 1024).toFixed(1)} GB</div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 4 }}>
+                                            <button
+                                                className={`btn btn-sm ${isActive ? 'btn-primary' : ''}`}
+                                                disabled={switching || isActive}
+                                                onClick={async () => {
+                                                    setSwitching(true);
+                                                    setStatusMsg(`Loading ${displayName}...`);
+                                                    try {
+                                                        await api.switchPhoneModel(m.name);
+                                                        await new Promise(r => setTimeout(r, 6000));
+                                                        fetchPhoneStatus();
+                                                        setStatusMsg(`${displayName} loaded!`);
+                                                    } catch {
+                                                        setStatusMsg('Switch failed');
+                                                    } finally {
+                                                        setSwitching(false);
+                                                        setTimeout(() => setStatusMsg(''), 3000);
+                                                    }
+                                                }}
+                                                style={{ fontSize: 10, padding: '2px 8px' }}
+                                            >
+                                                {isActive ? '● Active' : 'Use'}
+                                            </button>
+                                            <button
+                                                className="btn btn-sm"
+                                                onClick={() => handleDelete(m.name)}
+                                                style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent-red)' }}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: 4 }}>
-                                        <button
-                                            className={`btn btn-sm ${activeModel === m.name ? 'btn-primary' : ''}`}
-                                            onClick={() => setActiveModel(m.name)}
-                                            style={{ fontSize: 10, padding: '2px 8px' }}
-                                        >
-                                            {activeModel === m.name ? '●' : 'Use'}
-                                        </button>
-                                        <button
-                                            className="btn btn-sm"
-                                            onClick={() => handleDelete(m.name)}
-                                            style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent-red)' }}
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
