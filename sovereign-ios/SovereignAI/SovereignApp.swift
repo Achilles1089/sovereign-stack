@@ -9,7 +9,10 @@ struct SovereignApp: App {
             ContentView()
                 .environmentObject(server)
                 .onAppear {
-                    server.start()
+                    // Delay server start slightly to let UI settle
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        server.start()
+                    }
                 }
         }
     }

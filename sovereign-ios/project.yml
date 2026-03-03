@@ -20,6 +20,12 @@ targets:
           - Info.plist
     info:
       path: SovereignAI/Info.plist
+      properties:
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSLocalNetworkUsageDescription: "SovereignAI runs a local inference server accessible on your network."
+        UIBackgroundModes:
+          - audio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hschaheen.sovereignai

@@ -873,7 +873,7 @@ code,
 
 .terminal-chat {
   background: #000000;
-  border: 2px solid var(--crt-main, #33ff33);
+  border: 1px solid color-mix(in srgb, var(--crt-main, #22bb22) 40%, transparent);
   border-radius: 4px;
   padding: 0;
   flex: 1;
@@ -882,7 +882,7 @@ code,
   min-height: 0;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 20px var(--crt-glow, rgba(51, 255, 51, 0.08)), inset 0 0 60px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.4);
   font-family: "IBM Plex Mono", "Courier New", "Lucida Console", monospace;
 }
 
@@ -931,7 +931,7 @@ code,
 /* Terminal header bar */
 .terminal-header {
   background: #1a1a1a;
-  border-bottom: 1px solid var(--crt-main, #33ff33);
+  border-bottom: 1px solid color-mix(in srgb, var(--crt-main, #22bb22) 30%, transparent);
   padding: 6px 12px;
   display: flex;
   justify-content: space-between;
@@ -941,7 +941,7 @@ code,
 }
 
 .terminal-header-title {
-  color: var(--crt-main, #33ff33);
+  color: color-mix(in srgb, var(--crt-main, #22bb22) 75%, transparent);
   font-size: 11px;
   font-family: "IBM Plex Mono", "Courier New", monospace;
   letter-spacing: 1px;
@@ -1005,14 +1005,14 @@ code,
   font-family: "IBM Plex Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--crt-main, #33ff33);
-  text-shadow: 0 0 4px var(--crt-glow, rgba(51, 255, 51, 0.3));
+  color: var(--crt-main, #22bb22);
+  text-shadow: 0 0 2px color-mix(in srgb, var(--crt-glow, rgba(51, 255, 51, 0.15)) 50%, transparent);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .terminal-chat .chat-message.user .chat-bubble {
-  color: #ffffff;
+  color: #cccccc;
 }
 
 /* User prompt prefix */
@@ -1039,11 +1039,11 @@ code,
   display: inline-block;
   width: 8px;
   height: 14px;
-  background: var(--crt-main, #33ff33);
+  background: var(--crt-main, #22bb22);
   animation: cursor-blink 1s step-end infinite;
   vertical-align: text-bottom;
   margin-left: 2px;
-  box-shadow: 0 0 4px var(--crt-glow, rgba(51, 255, 51, 0.5));
+  box-shadow: 0 0 2px color-mix(in srgb, var(--crt-glow, rgba(51, 255, 51, 0.3)) 50%, transparent);
 }
 
 /* Terminal input prompt */
@@ -1070,12 +1070,12 @@ code,
 .terminal-chat .chat-input {
   background: transparent;
   border: none;
-  color: var(--crt-main, #33ff33);
+  color: var(--crt-main, #22bb22);
   font-family: "IBM Plex Mono", "Courier New", monospace;
   font-size: 13px;
   padding: 4px 8px;
-  caret-color: var(--crt-main, #33ff33);
-  text-shadow: 0 0 4px var(--crt-glow, rgba(51, 255, 51, 0.3));
+  caret-color: var(--crt-main, #22bb22);
+  text-shadow: 0 0 2px color-mix(in srgb, var(--crt-glow, rgba(51, 255, 51, 0.15)) 50%, transparent);
   outline: none;
   flex: 1;
 }
@@ -1134,4 +1134,180 @@ code,
   color: var(--crt-dim, #1a8a1a) !important;
   font-size: 12px !important;
   opacity: 0.85;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INLINE TERMINAL IMAGES
+   ═══════════════════════════════════════════════════════════ */
+
+.terminal-image {
+  max-width: 400px;
+  margin: 8px 0;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--crt-main, #22bb22) 30%, transparent);
+  border-radius: 4px;
+  background: #0a0a0a;
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 2px;
+  image-rendering: auto;
+}
+
+.terminal-image-meta {
+  font-size: 10px;
+  color: var(--crt-dim, #1a4a1a);
+  font-family: "IBM Plex Mono", monospace;
+  padding: 4px 0 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Tool call indicator */
+.terminal-tool-call {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--crt-dim, #1a4a1a);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.terminal-tool-icon {
+  font-size: 14px;
+}
+
+/* Generation progress bar */
+.gen-progress-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 6px 0;
+  max-width: 300px;
+}
+
+.gen-progress-fill {
+  height: 100%;
+  background: var(--crt-main, #22bb22);
+  border-radius: 2px;
+  animation: gen-progress 30s ease-out forwards;
+  box-shadow: 0 0 4px var(--crt-main, #22bb22);
+}
+
+@keyframes gen-progress {
+  0% {
+    width: 0%;
+  }
+
+  20% {
+    width: 30%;
+  }
+
+  50% {
+    width: 60%;
+  }
+
+  80% {
+    width: 85%;
+  }
+
+  100% {
+    width: 95%;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SETTINGS CONTROLS (Bird's Nest vertical slider pattern)
+   ═══════════════════════════════════════════════════════════ */
+
+.setting-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.setting-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.setting-label {
+  color: var(--text-muted);
+}
+
+.setting-value {
+  color: var(--accent-cyan);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.setting-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.setting-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(6, 182, 212, 0.4);
+}
+
+.setting-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+  border: none;
+}
+
+.setting-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  line-height: 1.3;
+}
+
+/* Clear chat button */
+.clear-chat-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.clear-chat-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
 }

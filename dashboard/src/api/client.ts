@@ -89,6 +89,16 @@ export interface ChatMessage {
     content: string;
 }
 
+export interface ImageGenResponse {
+    image: string;
+    time_ms: number;
+}
+
+export interface ImageGenStatus {
+    online: boolean;
+    model: string;
+}
+
 async function fetchJSON<T>(path: string): Promise<T> {
     const res = await fetch(API_BASE + path);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -104,6 +114,7 @@ export const api = {
     getCatalog: () => fetchJSON<{ catalog: CatalogEntry[] }>('/ai/catalog'),
     getPhoneStatus: () => fetchJSON<PhoneStatus>('/ai/phone-status'),
     getPhoneModels: () => fetchJSON<{ models: PhoneModel[]; active: string | null }>('/ai/phone-models'),
+    getImageStatus: () => fetchJSON<ImageGenStatus>('/ai/image-status'),
     switchPhoneModel: (model: string) => fetch(API_BASE + '/ai/phone-switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,6 +136,16 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
     }).then(r => r.json()),
+
+    generateImage: async (prompt: string): Promise<ImageGenResponse> => {
+        const res = await fetch(API_BASE + '/ai/image-generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, width: 512, height: 512 }),
+        });
+        if (!res.ok) throw new Error(`Image gen error: ${res.status}`);
+        return res.json();
+    },
 
     serverChat: async (message: string, model: string, onChunk: (text: string) => void) => {
         const res = await fetch(API_BASE + '/ai/server-chat', {

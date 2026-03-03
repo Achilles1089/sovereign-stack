@@ -42,10 +42,11 @@ type ServicesConfig struct {
 // AIConfig holds AI inference settings
 type AIConfig struct {
 	Enabled      bool   `yaml:"enabled"`
-	DefaultModel string `yaml:"default_model"` // e.g., "rwkv7-2.9B"
-	Host         string `yaml:"host"`          // "localhost:8085" — llama-server address
-	PhoneHost    string `yaml:"phone_host"`    // "localhost:8085" via ADB forward
-	ModelsDir    string `yaml:"models_dir"`    // local GGUF models directory
+	DefaultModel string `yaml:"default_model"`  // e.g., "rwkv7-2.9B"
+	Host         string `yaml:"host"`           // "localhost:8085" — llama-server address
+	PhoneHost    string `yaml:"phone_host"`     // "localhost:8085" via ADB forward
+	ModelsDir    string `yaml:"models_dir"`     // local GGUF models directory
+	ImageGenHost string `yaml:"image_gen_host"` // "192.168.1.x:8090" — mini PC running sd.cpp
 }
 
 // BackupConfig holds backup settings

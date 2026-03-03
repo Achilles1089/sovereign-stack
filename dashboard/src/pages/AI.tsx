@@ -11,6 +11,7 @@ const TERMINAL_COMMANDS = [
     { cmd: '/models', desc: 'List installed models' },
     { cmd: '/status', desc: 'Show system info' },
     { cmd: '/use', desc: 'Switch model (e.g. /use qwen3b)' },
+    { cmd: '/imagine', desc: 'Generate image (e.g. /imagine sunset)' },
     { cmd: '/clear', desc: 'Clear terminal' },
     { cmd: '/help', desc: 'Show available commands' },
 ];
@@ -53,10 +54,19 @@ export default function AI() {
     const chunkBufferRef = useRef('');
     const rafRef = useRef<number | null>(null);
 
+    // Context window slider — persisted to localStorage
+    const [contextSize, setContextSize] = useState(() =>
+        parseInt(localStorage.getItem('context-size') || '10', 10)
+    );
+    // Image generation in-flight flag (used to disable input during gen)
+    const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+    // Image gen node status
+    const [imageNodeOnline, setImageNodeOnline] = useState(false);
+
     // CRT color CSS variable
-    const crtMain = crtColor === 'amber' ? '#ffb000' : '#33ff33';
-    const crtDim = crtColor === 'amber' ? '#4a3000' : '#1a5a1a';
-    const crtGlow = crtColor === 'amber' ? 'rgba(255,176,0,0.3)' : 'rgba(51,255,51,0.3)';
+    const crtMain = crtColor === 'amber' ? '#cc8800' : '#22bb22';
+    const crtDim = crtColor === 'amber' ? '#4a3000' : '#1a4a1a';
+    const crtGlow = crtColor === 'amber' ? 'rgba(204,136,0,0.15)' : 'rgba(34,187,34,0.15)';
 
     // Boot sequence on mount
     useEffect(() => {
@@ -101,7 +111,11 @@ export default function AI() {
         const interval = setInterval(() => {
             fetchSystem();
             fetchPhoneStatus();
+            // Check image gen node
+            api.getImageStatus().then(d => setImageNodeOnline(d.online)).catch(() => setImageNodeOnline(false));
         }, 15000);
+        // Initial image node check
+        api.getImageStatus().then(d => setImageNodeOnline(d.online)).catch(() => setImageNodeOnline(false));
         return () => clearInterval(interval);
     }, []);
 
@@ -222,6 +236,51 @@ export default function AI() {
             }
             return true;
         }
+        if (command === '/imagine') {
+            const prompt = parts.slice(1).join(' ');
+            if (!prompt) {
+                setMessages(prev => [...prev, { role: 'system', content: 'Usage: /imagine <prompt>\nExample: /imagine a sunset over mountains' }]);
+                return true;
+            }
+            if (!imageNodeOnline) {
+                setMessages(prev => [...prev, { role: 'system', content: '[!] Image gen node offline. Start sd_server on the mini PC.' }]);
+                return true;
+            }
+            // Show progress message
+            setMessages(prev => [...prev, { role: 'system', content: `🎨 Generating: ${prompt}...\n<IMAGEPROGRESS>` }]);
+            setIsGeneratingImage(true);
+            const startTime = Date.now();
+            api.generateImage(prompt).then(result => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                setMessages(prev => {
+                    const updated = [...prev];
+                    // Find the progress message (loop backwards for compat)
+                    let progressIdx = -1;
+                    for (let j = updated.length - 1; j >= 0; j--) {
+                        if (updated[j].content.includes('<IMAGEPROGRESS>')) { progressIdx = j; break; }
+                    }
+                    if (progressIdx >= 0) {
+                        updated[progressIdx] = { role: 'system', content: `<IMAGE>${result.image}</IMAGE>\n${prompt} — ${elapsed}s` };
+                    }
+                    return updated;
+                });
+            }).catch(() => {
+                setMessages(prev => {
+                    const updated = [...prev];
+                    let progressIdx = -1;
+                    for (let j = updated.length - 1; j >= 0; j--) {
+                        if (updated[j].content.includes('<IMAGEPROGRESS>')) { progressIdx = j; break; }
+                    }
+                    if (progressIdx >= 0) {
+                        updated[progressIdx] = { role: 'system', content: '[!] Image generation failed. Check mini PC connection.' };
+                    }
+                    return updated;
+                });
+            }).finally(() => {
+                setIsGeneratingImage(false);
+            });
+            return true;
+        }
         return false;
     };
 
@@ -255,7 +314,7 @@ export default function AI() {
             const chatMessages = messages.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
             chatMessages.push({ role: 'user' as const, content: input });
             // Limit context to last 10 messages — phone CPU prefill is slow on long history
-            const contextWindow = chatMessages.slice(-10);
+            const contextWindow = chatMessages.slice(-contextSize);
             await api.chat(phoneStatus?.model || '', contextWindow, (chunk) => {
                 // Buffer chunks and batch state updates via requestAnimationFrame
                 chunkBufferRef.current += chunk;
@@ -494,10 +553,20 @@ export default function AI() {
                                     {phoneStatus.battery_pct != null && phoneStatus.battery_pct >= 0 ? ` │ ${phoneStatus.battery_pct}%` : ''}
                                 </span>
                             )}
+                            {imageNodeOnline && (
+                                <span style={{ color: crtDim, fontSize: 10 }}>│ 🎨</span>
+                            )}
                             {phoneStatus?.running && (
                                 <span style={{ color: crtMain }}>{phoneStatus.display_name || phoneStatus.model}</span>
                             )}
                             <span className={`terminal-dot ${phoneStatus?.running ? 'on' : 'off'}`} />
+                            <button
+                                className="clear-chat-btn"
+                                onClick={() => setMessages([{ role: 'system', content: 'Terminal cleared.' }])}
+                                title="Clear chat"
+                            >
+                                CLR
+                            </button>
                             <button
                                 onClick={() => {
                                     const next = crtColor === 'green' ? 'amber' : 'green';
@@ -507,7 +576,7 @@ export default function AI() {
                                 title={`Switch to ${crtColor === 'green' ? 'amber' : 'green'} CRT`}
                                 style={{
                                     background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12,
-                                    color: crtColor === 'green' ? '#ffb000' : '#33ff33', padding: '0 4px',
+                                    color: crtColor === 'green' ? '#cc8800' : '#22bb22', padding: '0 4px',
                                 }}
                             >
                                 ◉
@@ -518,6 +587,46 @@ export default function AI() {
                     <div className="chat-messages">
                         {messages.map((msg, i) => {
                             if (msg.role === 'system') {
+                                // Inline image rendering
+                                if (msg.content.includes('<IMAGE>')) {
+                                    const imageMatch = msg.content.match(/<IMAGE>(.*?)<\/IMAGE>/);
+                                    const caption = msg.content.replace(/<IMAGE>.*?<\/IMAGE>\n?/, '').trim();
+                                    return (
+                                        <div key={i} className="chat-message assistant">
+                                            <div className="chat-bubble terminal-system-msg">
+                                                <div className="terminal-tool-call">
+                                                    <span className="terminal-tool-icon">🎨</span>
+                                                    <span>Image Generated</span>
+                                                </div>
+                                                {imageMatch && (
+                                                    <div className="terminal-image">
+                                                        <img src={imageMatch[1]} alt={caption} />
+                                                        <div className="terminal-image-meta">
+                                                            <span>{caption}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                // Image generation progress
+                                if (msg.content.includes('<IMAGEPROGRESS>')) {
+                                    const promptText = msg.content.replace('\n<IMAGEPROGRESS>', '').replace('🎨 Generating: ', '').replace('...', '');
+                                    return (
+                                        <div key={i} className="chat-message assistant">
+                                            <div className="chat-bubble terminal-system-msg">
+                                                <div className="terminal-tool-call">
+                                                    <span className="terminal-tool-icon">🎨</span>
+                                                    <span>Generating: {promptText}...</span>
+                                                </div>
+                                                <div className="gen-progress-bar">
+                                                    <div className="gen-progress-fill" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
                                 return (
                                     <div key={i} className="chat-message assistant">
                                         <div className="chat-bubble terminal-system-msg">{msg.content}</div>
@@ -555,9 +664,9 @@ export default function AI() {
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            disabled={isLoading || !phoneStatus?.running}
+                            disabled={isLoading || isGeneratingImage || !phoneStatus?.running}
                         />
-                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || !phoneStatus?.running}>SEND</button>
+                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || isGeneratingImage || !phoneStatus?.running}>SEND</button>
                         {isLoading && (
                             <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ STOP</button>
                         )}
@@ -594,6 +703,12 @@ export default function AI() {
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: 'var(--text-muted)' }}>Engine</span>
                                 <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Quant</span>
+                                <span className="mono" style={{ fontSize: 11, color: 'var(--accent-amber)' }}>
+                                    {phoneStatus.model ? phoneStatus.model.replace('.gguf', '').split('-').pop()?.toUpperCase() || 'N/A' : 'N/A'}
+                                </span>
                             </div>
 
                         </div>
@@ -740,6 +855,42 @@ export default function AI() {
                             </button>
                         ))}
                     </div>
+                </div>
+
+                {/* Context Window Slider */}
+                <div className="card compact">
+                    <div className="card-title">Performance</div>
+                    <div className="setting-block">
+                        <div className="setting-label-row">
+                            <span className="setting-label">Context Window</span>
+                            <span className="setting-value">{contextSize} msgs</span>
+                        </div>
+                        <input
+                            type="range"
+                            className="setting-slider"
+                            min={2}
+                            max={20}
+                            value={contextSize}
+                            onChange={e => {
+                                const val = parseInt(e.target.value, 10);
+                                setContextSize(val);
+                                localStorage.setItem('context-size', String(val));
+                            }}
+                        />
+                        <div className="setting-hint">Fewer = faster responses on small models</div>
+                    </div>
+                    {imageNodeOnline && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--accent-green)' }}>
+                            <span className="status-dot up" />
+                            <span>Image Gen Node</span>
+                        </div>
+                    )}
+                    {!imageNodeOnline && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                            <span className="status-dot down" />
+                            <span>Image Gen Offline</span>
+                        </div>
+                    )}
                 </div>
             </aside>
         </div>

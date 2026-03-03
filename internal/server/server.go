@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -67,6 +68,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/ai/phone-models", s.handlePhoneModels)
 	mux.HandleFunc("/api/ai/phone-switch", s.handlePhoneSwitch)
 	mux.HandleFunc("/api/ai/phone-start", s.handlePhoneStart)
+	mux.HandleFunc("/api/ai/image-generate", s.handleImageGenerate)
+	mux.HandleFunc("/api/ai/image-status", s.handleImageStatus)
 
 	// Serve static dashboard files (SPA fallback)
 	if s.staticDir != "" {
@@ -437,6 +440,81 @@ func (s *Server) handleAISwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]interface{}{"ok": true, "model": req.Model, "message": fmt.Sprintf("Switched to %s", req.Model)})
+}
+
+// handleImageGenerate proxies image generation requests to the mini PC's sd_server
+func (s *Server) handleImageGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(200)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	imageHost := s.cfg.AI.ImageGenHost
+	if imageHost == "" {
+		writeJSON(w, map[string]interface{}{"error": "image_gen_host not configured"})
+		return
+	}
+
+	// Read and forward the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to read request"})
+		return
+	}
+
+	// Proxy to sd_server
+	client := &http.Client{Timeout: 120 * time.Second}
+	proxyReq, err := http.NewRequest("POST", fmt.Sprintf("http://%s/generate", imageHost), bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("image gen node unreachable: %s", err.Error())})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
+// handleImageStatus checks if the image gen node (mini PC) is online
+func (s *Server) handleImageStatus(w http.ResponseWriter, r *http.Request) {
+	imageHost := s.cfg.AI.ImageGenHost
+	if imageHost == "" {
+		writeJSON(w, map[string]interface{}{"online": false, "model": ""})
+		return
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://%s/status", imageHost))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"online": false, "model": ""})
+		return
+	}
+	defer resp.Body.Close()
+
+	var status struct {
+		Model  string `json:"model"`
+		Online bool   `json:"online"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		writeJSON(w, map[string]interface{}{"online": true, "model": "unknown"})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"online": true, "model": status.Model})
 }
 
 func (s *Server) handlePhoneStatus(w http.ResponseWriter, r *http.Request) {
