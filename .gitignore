@@ -1,6 +1,7 @@
 # Binaries
 sovereign
 sovereign-*
+!sovereign-ios/
 *.exe
 *.dll
 *.so
