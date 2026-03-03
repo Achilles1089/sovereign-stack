@@ -8,13 +8,28 @@
 
 /* Begin PBXBuildFile section */
 		24B77B6749EA18DCCDE1C5D4 /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED7DAA268ABD3CAE369541F /* ModelManager.swift */; };
-		35D72DE0D44D56649CED98CC /* llama in Frameworks */ = {isa = PBXBuildFile; productRef = 17D679DAD21BEE1C1601CB89 /* llama */; };
+		4373741D85DFDC5FD2C2D216 /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 85021700DBFD56A7675F5891 /* llama.xcframework */; };
 		667C0F918A3A26007A2EDED9 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E8EB2F3818F0F550720CA6 /* ServerManager.swift */; };
 		A1FBE71A79A2E8C669146600 /* LlamaEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6E86F5A20D2BAE85C81829 /* LlamaEngine.swift */; };
 		A320174E64570458E4F0C161 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34157B3F3B8E83FB5C7B6FFE /* ContentView.swift */; };
+		A4EF8AA1C20D244BB343E5C3 /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 85021700DBFD56A7675F5891 /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C04519FD102B3B84E3324EEA /* SovereignApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3188392E59D307CCC98C2A1F /* SovereignApp.swift */; };
 		F31588F5E442AE80805B80F5 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = C5D539E08FB8AA17B7C052D6 /* Vapor */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		5CCAA7DB136BC27D28516294 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A4EF8AA1C20D244BB343E5C3 /* llama.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0C6E86F5A20D2BAE85C81829 /* LlamaEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaEngine.swift; sourceTree = "<group>"; };
@@ -22,6 +37,7 @@
 		34157B3F3B8E83FB5C7B6FFE /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5ED7DAA268ABD3CAE369541F /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
 		78EAAB2911A360F611504459 /* SovereignAI.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SovereignAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		85021700DBFD56A7675F5891 /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama.xcframework; path = Frameworks/llama.xcframework; sourceTree = "<group>"; };
 		A7E8EB2F3818F0F550720CA6 /* ServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -31,7 +47,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F31588F5E442AE80805B80F5 /* Vapor in Frameworks */,
-				35D72DE0D44D56649CED98CC /* llama in Frameworks */,
+				4373741D85DFDC5FD2C2D216 /* llama.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -42,8 +58,17 @@
 			isa = PBXGroup;
 			children = (
 				316F1978306B09687DCD1D4F /* SovereignAI */,
+				1687666C485E80B42E7FFB0F /* Frameworks */,
 				19C070184D28BC314373A854 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		1687666C485E80B42E7FFB0F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				85021700DBFD56A7675F5891 /* llama.xcframework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		19C070184D28BC314373A854 /* Products */ = {
@@ -75,6 +100,7 @@
 			buildPhases = (
 				178D9776D16C021DFFA5D470 /* Sources */,
 				F5A039204E948D7C91B6EE9E /* Frameworks */,
+				5CCAA7DB136BC27D28516294 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -83,7 +109,6 @@
 			name = SovereignAI;
 			packageProductDependencies = (
 				C5D539E08FB8AA17B7C052D6 /* Vapor */,
-				17D679DAD21BEE1C1601CB89 /* llama */,
 			);
 			productName = SovereignAI;
 			productReference = 78EAAB2911A360F611504459 /* SovereignAI.app */;
@@ -114,7 +139,6 @@
 			mainGroup = 03999F575C689C457FA8491D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				75CE5B98F7A1BEE6ED4DD22C /* XCRemoteSwiftPackageReference "llama.cpp-spm" */,
 				BF9E9C9F0949501878989CE6 /* XCRemoteSwiftPackageReference "vapor" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -193,7 +217,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -250,7 +274,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -268,8 +292,15 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64",
+					"\"Frameworks\"",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64/llama.framework/Headers",
+				);
 				INFOPLIST_FILE = SovereignAI/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -288,8 +319,15 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64",
+					"\"Frameworks\"",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Frameworks/llama.xcframework/ios-arm64/llama.framework/Headers",
+				);
 				INFOPLIST_FILE = SovereignAI/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -325,14 +363,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		75CE5B98F7A1BEE6ED4DD22C /* XCRemoteSwiftPackageReference "llama.cpp-spm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/StanfordBDHG/llama.cpp-spm.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.3.3;
-			};
-		};
 		BF9E9C9F0949501878989CE6 /* XCRemoteSwiftPackageReference "vapor" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/vapor/vapor.git";
@@ -344,11 +374,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		17D679DAD21BEE1C1601CB89 /* llama */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 75CE5B98F7A1BEE6ED4DD22C /* XCRemoteSwiftPackageReference "llama.cpp-spm" */;
-			productName = llama;
-		};
 		C5D539E08FB8AA17B7C052D6 /* Vapor */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BF9E9C9F0949501878989CE6 /* XCRemoteSwiftPackageReference "vapor" */;

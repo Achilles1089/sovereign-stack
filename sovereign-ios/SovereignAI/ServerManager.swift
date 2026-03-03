@@ -1,6 +1,6 @@
 import Foundation
+import UIKit
 import Vapor
-import Combine
 
 /// Manages the Vapor HTTP server and LLM engine
 class ServerManager: ObservableObject {
@@ -78,37 +78,37 @@ class ServerManager: ObservableObject {
         // List models (OpenAI-compatible)
         app.get("v1", "models") { [weak self] req -> Response in
             self?.log("GET /v1/models")
-            let models: [[String: Any]] = [{
-                let m = self?.engine.modelName ?? "none"
-                return [
-                    "id": m,
-                    "object": "model",
-                    "owned_by": "sovereign"
-                ]
-            }()]
-            let body: [String: Any] = ["object": "list", "data": models]
-            let json = try JSONSerialization.data(withJSONObject: body)
-            return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: json))
+            let modelName = self?.engine.modelName ?? "none"
+            let jsonStr = """
+            {"object":"list","data":[{"id":"\(modelName)","object":"model","owned_by":"sovereign"}]}
+            """
+            return Response(
+                status: .ok,
+                headers: ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                body: .init(string: jsonStr)
+            )
         }
         
         // Status endpoint
         app.get("status") { [weak self] req -> Response in
             self?.log("GET /status")
-            let status: [String: Any] = [
-                "status": self?.engine.isLoaded == true ? "ready" : "no_model",
-                "model": self?.engine.modelName ?? "none",
-                "tok_per_sec": self?.engine.lastTokPerSec ?? 0,
-                "device": "iPhone",
-                "chip": "A13 Bionic",
-                "ram_total_mb": ProcessInfo.processInfo.physicalMemory / 1_048_576,
-                "battery_pct": self?.getBatteryLevel() ?? -1,
-                "gpu": "Metal"
-            ]
-            let json = try JSONSerialization.data(withJSONObject: status)
-            return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: json))
+            let modelName = self?.engine.modelName ?? "none"
+            let tokPerSec = self?.engine.lastTokPerSec ?? 0
+            let isLoaded = self?.engine.isLoaded ?? false
+            let ramTotal = ProcessInfo.processInfo.physicalMemory / 1_048_576
+            let battery = self?.getBatteryLevel() ?? -1
+            
+            let jsonStr = """
+            {"status":"\(isLoaded ? "ready" : "no_model")","model":"\(modelName)","tok_per_sec":\(tokPerSec),"device":"iPhone","chip":"A13 Bionic","ram_total_mb":\(ramTotal),"battery_pct":\(battery),"gpu":"Metal"}
+            """
+            return Response(
+                status: .ok,
+                headers: ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                body: .init(string: jsonStr)
+            )
         }
         
-        // Chat completions (OpenAI-compatible, streaming)
+        // Chat completions (OpenAI-compatible)
         app.on(.POST, "v1", "chat", "completions") { [weak self] req -> Response in
             guard let self = self else {
                 return Response(status: .internalServerError)
@@ -129,116 +129,53 @@ class ServerManager: ObservableObject {
                 chatReq = try req.content.decode(ChatRequest.self)
             } catch {
                 self.log("Bad request: \(error)")
-                return Response(status: .badRequest, body: .init(string: "{\"error\": \"Invalid request\"}"))
+                return Response(status: .badRequest, body: .init(string: "{\"error\":\"Invalid request\"}"))
             }
             
             guard self.engine.isLoaded else {
-                return Response(status: .serviceUnavailable, body: .init(string: "{\"error\": \"No model loaded\"}"))
+                return Response(status: .serviceUnavailable, body: .init(string: "{\"error\":\"No model loaded\"}"))
             }
             
-            let shouldStream = chatReq.stream ?? false
             let maxTok = chatReq.max_tokens ?? 512
             
-            if shouldStream {
-                // SSE streaming response
-                let headers = HTTPHeaders([
-                    ("Content-Type", "text/event-stream"),
-                    ("Cache-Control", "no-cache"),
-                    ("Connection", "keep-alive"),
-                    ("Access-Control-Allow-Origin", "*"),
-                ])
+            // Non-streaming response (simpler, more compatible)
+            do {
+                var fullText = ""
+                fullText = try self.engine.complete(
+                    messages: chatReq.messages,
+                    maxTokens: maxTok,
+                    onToken: { _ in },
+                    isCancelled: { false }
+                )
                 
-                let response = Response(status: .ok, headers: headers)
                 let id = UUID().uuidString
+                let created = Int(Date().timeIntervalSince1970)
+                // Escape any special chars in the output
+                let escaped = fullText
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                    .replacingOccurrences(of: "\n", with: "\\n")
+                    .replacingOccurrences(of: "\r", with: "\\r")
+                    .replacingOccurrences(of: "\t", with: "\\t")
                 
-                response.body = .init(asyncStream: { writer in
-                    do {
-                        _ = try self.engine.complete(
-                            messages: chatReq.messages,
-                            maxTokens: maxTok,
-                            onToken: { token in
-                                let chunk: [String: Any] = [
-                                    "id": "chatcmpl-\(id)",
-                                    "object": "chat.completion.chunk",
-                                    "created": Int(Date().timeIntervalSince1970),
-                                    "choices": [[
-                                        "index": 0,
-                                        "delta": ["content": token],
-                                        "finish_reason": NSNull()
-                                    ]]
-                                ]
-                                if let jsonData = try? JSONSerialization.data(withJSONObject: chunk),
-                                   let jsonStr = String(data: jsonData, encoding: .utf8) {
-                                    _ = try? writer.write(.buffer(.init(string: "data: \(jsonStr)\n\n")))
-                                }
-                            },
-                            isCancelled: { false }
-                        )
-                        
-                        // Send done
-                        let doneChunk: [String: Any] = [
-                            "id": "chatcmpl-\(id)",
-                            "object": "chat.completion.chunk",
-                            "created": Int(Date().timeIntervalSince1970),
-                            "choices": [[
-                                "index": 0,
-                                "delta": [:] as [String: String],
-                                "finish_reason": "stop"
-                            ]]
-                        ]
-                        if let jsonData = try? JSONSerialization.data(withJSONObject: doneChunk),
-                           let jsonStr = String(data: jsonData, encoding: .utf8) {
-                            _ = try? writer.write(.buffer(.init(string: "data: \(jsonStr)\n\n")))
-                        }
-                        _ = try? writer.write(.buffer(.init(string: "data: [DONE]\n\n")))
-                        try writer.write(.end)
-                        
-                        self.log("Streamed \(String(format: "%.1f", self.engine.lastTokPerSec)) tok/s")
-                        DispatchQueue.main.async {
-                            self.lastTokPerSec = self.engine.lastTokPerSec
-                            self.activeModel = self.engine.modelName
-                        }
-                    } catch {
-                        self.log("Stream error: \(error)")
-                        try? writer.write(.end)
-                    }
-                })
+                let jsonStr = """
+                {"id":"chatcmpl-\(id)","object":"chat.completion","created":\(created),"choices":[{"index":0,"message":{"role":"assistant","content":"\(escaped)"},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}
+                """
                 
-                return response
-            } else {
-                // Non-streaming response
-                do {
-                    var fullText = ""
-                    fullText = try self.engine.complete(
-                        messages: chatReq.messages,
-                        maxTokens: maxTok,
-                        onToken: { _ in },
-                        isCancelled: { false }
-                    )
-                    
-                    let result: [String: Any] = [
-                        "id": "chatcmpl-\(UUID().uuidString)",
-                        "object": "chat.completion",
-                        "created": Int(Date().timeIntervalSince1970),
-                        "choices": [[
-                            "index": 0,
-                            "message": ["role": "assistant", "content": fullText],
-                            "finish_reason": "stop"
-                        ]],
-                        "usage": [
-                            "prompt_tokens": 0,
-                            "completion_tokens": 0,
-                            "total_tokens": 0
-                        ]
-                    ]
-                    
-                    let json = try JSONSerialization.data(withJSONObject: result)
-                    self.log("Completed \(String(format: "%.1f", self.engine.lastTokPerSec)) tok/s")
-                    return Response(status: .ok, headers: ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"], body: .init(data: json))
-                } catch {
-                    self.log("Completion error: \(error)")
-                    return Response(status: .internalServerError, body: .init(string: "{\"error\": \"\(error)\"}"))
+                self.log("Completed \(String(format: "%.1f", self.engine.lastTokPerSec)) tok/s")
+                DispatchQueue.main.async {
+                    self.lastTokPerSec = self.engine.lastTokPerSec
+                    self.activeModel = self.engine.modelName
                 }
+                
+                return Response(
+                    status: .ok,
+                    headers: ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                    body: .init(string: jsonStr)
+                )
+            } catch {
+                self.log("Completion error: \(error)")
+                return Response(status: .internalServerError, body: .init(string: "{\"error\":\"\(error)\"}"))
             }
         }
         
@@ -254,7 +191,6 @@ class ServerManager: ObservableObject {
     
     // MARK: - Model Management
     
-    /// Auto-load first available model from Documents
     private func autoLoadModel() {
         let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         do {
@@ -266,7 +202,7 @@ class ServerManager: ObservableObject {
                     self.log("Loaded: \(self.engine.modelName)")
                 }
             } else {
-                log("No GGUF models in Documents. Use iTunes File Sharing or download in-app.")
+                log("No GGUF models found. Transfer via Finder File Sharing.")
             }
         } catch {
             log("Model scan error: \(error)")
@@ -286,10 +222,10 @@ class ServerManager: ObservableObject {
             
             if addrFamily == UInt8(AF_INET) {
                 let name = String(cString: interface.ifa_name)
-                if name == "en0" { // WiFi interface
+                if name == "en0" {
                     var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                     getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len),
-                               &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
+                                &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
                     address = String(cString: hostname)
                 }
             }
