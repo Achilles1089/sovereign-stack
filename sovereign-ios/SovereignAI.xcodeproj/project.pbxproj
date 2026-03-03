@@ -1,0 +1,360 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		24B77B6749EA18DCCDE1C5D4 /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED7DAA268ABD3CAE369541F /* ModelManager.swift */; };
+		35D72DE0D44D56649CED98CC /* llama in Frameworks */ = {isa = PBXBuildFile; productRef = 17D679DAD21BEE1C1601CB89 /* llama */; };
+		667C0F918A3A26007A2EDED9 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E8EB2F3818F0F550720CA6 /* ServerManager.swift */; };
+		A1FBE71A79A2E8C669146600 /* LlamaEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6E86F5A20D2BAE85C81829 /* LlamaEngine.swift */; };
+		A320174E64570458E4F0C161 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34157B3F3B8E83FB5C7B6FFE /* ContentView.swift */; };
+		C04519FD102B3B84E3324EEA /* SovereignApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3188392E59D307CCC98C2A1F /* SovereignApp.swift */; };
+		F31588F5E442AE80805B80F5 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = C5D539E08FB8AA17B7C052D6 /* Vapor */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0C6E86F5A20D2BAE85C81829 /* LlamaEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaEngine.swift; sourceTree = "<group>"; };
+		3188392E59D307CCC98C2A1F /* SovereignApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SovereignApp.swift; sourceTree = "<group>"; };
+		34157B3F3B8E83FB5C7B6FFE /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		5ED7DAA268ABD3CAE369541F /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
+		78EAAB2911A360F611504459 /* SovereignAI.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SovereignAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A7E8EB2F3818F0F550720CA6 /* ServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManager.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F5A039204E948D7C91B6EE9E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F31588F5E442AE80805B80F5 /* Vapor in Frameworks */,
+				35D72DE0D44D56649CED98CC /* llama in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		03999F575C689C457FA8491D = {
+			isa = PBXGroup;
+			children = (
+				316F1978306B09687DCD1D4F /* SovereignAI */,
+				19C070184D28BC314373A854 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		19C070184D28BC314373A854 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				78EAAB2911A360F611504459 /* SovereignAI.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		316F1978306B09687DCD1D4F /* SovereignAI */ = {
+			isa = PBXGroup;
+			children = (
+				34157B3F3B8E83FB5C7B6FFE /* ContentView.swift */,
+				0C6E86F5A20D2BAE85C81829 /* LlamaEngine.swift */,
+				5ED7DAA268ABD3CAE369541F /* ModelManager.swift */,
+				A7E8EB2F3818F0F550720CA6 /* ServerManager.swift */,
+				3188392E59D307CCC98C2A1F /* SovereignApp.swift */,
+			);
+			path = SovereignAI;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3EDDF8AB2B62F8D5C8C3E242 /* SovereignAI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3B03B574D7A30CDBF40832DA /* Build configuration list for PBXNativeTarget "SovereignAI" */;
+			buildPhases = (
+				178D9776D16C021DFFA5D470 /* Sources */,
+				F5A039204E948D7C91B6EE9E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SovereignAI;
+			packageProductDependencies = (
+				C5D539E08FB8AA17B7C052D6 /* Vapor */,
+				17D679DAD21BEE1C1601CB89 /* llama */,
+			);
+			productName = SovereignAI;
+			productReference = 78EAAB2911A360F611504459 /* SovereignAI.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		078A1E682042CFCACF80A67F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					3EDDF8AB2B62F8D5C8C3E242 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 26961E4BF0D8ACAE0C8258ED /* Build configuration list for PBXProject "SovereignAI" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 03999F575C689C457FA8491D;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				75CE5B98F7A1BEE6ED4DD22C /* XCRemoteSwiftPackageReference "llama.cpp-spm" */,
+				BF9E9C9F0949501878989CE6 /* XCRemoteSwiftPackageReference "vapor" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3EDDF8AB2B62F8D5C8C3E242 /* SovereignAI */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		178D9776D16C021DFFA5D470 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A320174E64570458E4F0C161 /* ContentView.swift in Sources */,
+				A1FBE71A79A2E8C669146600 /* LlamaEngine.swift in Sources */,
+				24B77B6749EA18DCCDE1C5D4 /* ModelManager.swift in Sources */,
+				667C0F918A3A26007A2EDED9 /* ServerManager.swift in Sources */,
+				C04519FD102B3B84E3324EEA /* SovereignApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0A74352901D723DD9B699991 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		11C1036B00EA5001B02D3C47 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5F2864DBEEEC6D3AF3C04CF6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = SovereignAI/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hschaheen.sovereignai;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		EB71F69E43FD5FF242FD1078 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = SovereignAI/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hschaheen.sovereignai;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		26961E4BF0D8ACAE0C8258ED /* Build configuration list for PBXProject "SovereignAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A74352901D723DD9B699991 /* Debug */,
+				11C1036B00EA5001B02D3C47 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3B03B574D7A30CDBF40832DA /* Build configuration list for PBXNativeTarget "SovereignAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5F2864DBEEEC6D3AF3C04CF6 /* Debug */,
+				EB71F69E43FD5FF242FD1078 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		75CE5B98F7A1BEE6ED4DD22C /* XCRemoteSwiftPackageReference "llama.cpp-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/StanfordBDHG/llama.cpp-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.3;
+			};
+		};
+		BF9E9C9F0949501878989CE6 /* XCRemoteSwiftPackageReference "vapor" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/vapor/vapor.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.89.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		17D679DAD21BEE1C1601CB89 /* llama */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 75CE5B98F7A1BEE6ED4DD22C /* XCRemoteSwiftPackageReference "llama.cpp-spm" */;
+			productName = llama;
+		};
+		C5D539E08FB8AA17B7C052D6 /* Vapor */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BF9E9C9F0949501878989CE6 /* XCRemoteSwiftPackageReference "vapor" */;
+			productName = Vapor;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 078A1E682042CFCACF80A67F /* Project object */;
+}

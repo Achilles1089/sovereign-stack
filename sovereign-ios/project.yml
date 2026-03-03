@@ -2,29 +2,38 @@ name: SovereignAI
 options:
   bundleIdPrefix: com.sovereign
   deploymentTarget:
-    iOS: "16.0"
-  xcodeVersion: "15.0"
+    iOS: "26.0"
   createIntermediateGroups: true
 
 packages:
-  Vapor:
+  vapor:
     url: https://github.com/vapor/vapor.git
     from: 4.89.0
+  llama-cpp-spm:
+    url: https://github.com/StanfordBDHG/llama.cpp-spm.git
+    from: 0.3.3
 
 targets:
   SovereignAI:
     type: application
     platform: iOS
-    sources: [SovereignAI]
+    sources:
+      - path: SovereignAI
+        excludes:
+          - Info.plist
+    info:
+      path: SovereignAI/Info.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.sovereign.ai
-        INFOPLIST_FILE: SovereignAI/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.hschaheen.sovereignai
         SWIFT_VERSION: "5.9"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
         TARGETED_DEVICE_FAMILY: "1"
-        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         ENABLE_USER_SCRIPT_SANDBOXING: "NO"
     dependencies:
-      - package: Vapor
+      - package: vapor
+        product: Vapor
+      - package: llama-cpp-spm
+        product: llama
+    postBuildScripts: []
