@@ -873,7 +873,7 @@ code,
 
 .terminal-chat {
   background: #000000;
-  border: 2px solid #33ff33;
+  border: 2px solid var(--crt-main, #33ff33);
   border-radius: 4px;
   padding: 0;
   flex: 1;
@@ -882,7 +882,7 @@ code,
   min-height: 0;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 20px rgba(51, 255, 51, 0.08), inset 0 0 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 20px var(--crt-glow, rgba(51, 255, 51, 0.08)), inset 0 0 60px rgba(0, 0, 0, 0.5);
   font-family: "IBM Plex Mono", "Courier New", "Lucida Console", monospace;
 }
 
@@ -964,8 +964,8 @@ code,
 }
 
 .terminal-dot.on {
-  background: #33ff33;
-  box-shadow: 0 0 6px #33ff33;
+  background: var(--crt-main, #33ff33);
+  box-shadow: 0 0 6px var(--crt-main, #33ff33);
 }
 
 .terminal-dot.off {
@@ -1005,8 +1005,8 @@ code,
   font-family: "IBM Plex Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.5;
-  color: #33ff33;
-  text-shadow: 0 0 4px rgba(51, 255, 51, 0.3);
+  color: var(--crt-main, #33ff33);
+  text-shadow: 0 0 4px var(--crt-glow, rgba(51, 255, 51, 0.3));
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1039,11 +1039,11 @@ code,
   display: inline-block;
   width: 8px;
   height: 14px;
-  background: #33ff33;
+  background: var(--crt-main, #33ff33);
   animation: cursor-blink 1s step-end infinite;
   vertical-align: text-bottom;
   margin-left: 2px;
-  box-shadow: 0 0 4px rgba(51, 255, 51, 0.5);
+  box-shadow: 0 0 4px var(--crt-glow, rgba(51, 255, 51, 0.5));
 }
 
 /* Terminal input prompt */
@@ -1052,7 +1052,7 @@ code,
   align-items: center;
   gap: 0;
   padding: 8px 16px 12px;
-  border-top: 1px solid #1a3a1a;
+  border-top: 1px solid var(--crt-dim, #1a3a1a);
   z-index: 2;
   position: relative;
   background: #000000;
@@ -1070,18 +1070,18 @@ code,
 .terminal-chat .chat-input {
   background: transparent;
   border: none;
-  color: #33ff33;
+  color: var(--crt-main, #33ff33);
   font-family: "IBM Plex Mono", "Courier New", monospace;
   font-size: 13px;
   padding: 4px 8px;
-  caret-color: #33ff33;
-  text-shadow: 0 0 4px rgba(51, 255, 51, 0.3);
+  caret-color: var(--crt-main, #33ff33);
+  text-shadow: 0 0 4px var(--crt-glow, rgba(51, 255, 51, 0.3));
   outline: none;
   flex: 1;
 }
 
 .terminal-chat .chat-input::placeholder {
-  color: #1a5a1a;
+  color: var(--crt-dim, #1a5a1a);
 }
 
 .terminal-chat .chat-input:focus {
@@ -1091,8 +1091,8 @@ code,
 /* Send button */
 .terminal-chat .btn-primary {
   background: transparent;
-  border: 1px solid #33ff33;
-  color: #33ff33;
+  border: 1px solid var(--crt-main, #33ff33);
+  color: var(--crt-main, #33ff33);
   font-family: "IBM Plex Mono", "Courier New", monospace;
   font-size: 11px;
   padding: 4px 12px;
@@ -1102,8 +1102,8 @@ code,
 }
 
 .terminal-chat .btn-primary:hover {
-  background: rgba(51, 255, 51, 0.1);
-  box-shadow: 0 0 8px rgba(51, 255, 51, 0.2);
+  background: var(--crt-glow, rgba(51, 255, 51, 0.1));
+  box-shadow: 0 0 8px var(--crt-glow, rgba(51, 255, 51, 0.2));
 }
 
 .terminal-chat .btn-danger {
