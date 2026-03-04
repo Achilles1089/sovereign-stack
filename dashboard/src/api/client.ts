@@ -313,4 +313,13 @@ export const api = {
         if (!res.ok) throw new Error(`Delete error: ${res.status}`);
         return res.json();
     },
+
+    // Gallery
+    getGalleryImages: () => fetchJSON<{ images: Array<{ id: string; prompt: string; width: number; height: number; created_at: string; size_bytes: number }> }>('/gallery'),
+    getGalleryImageUrl: (id: string) => API_BASE + `/gallery/image/${id}`,
+    deleteGalleryImage: async (id: string): Promise<{ deleted: string }> => {
+        const res = await fetch(API_BASE + `/gallery/delete/${id}`, { method: 'POST' });
+        if (!res.ok) throw new Error(`Delete error: ${res.status}`);
+        return res.json();
+    },
 };

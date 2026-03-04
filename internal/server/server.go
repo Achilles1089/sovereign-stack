@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -82,6 +84,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/ai/rag-documents", s.handleRAGProxy)
 	mux.HandleFunc("/api/ai/rag-delete", s.handleRAGProxy)
 	mux.HandleFunc("/api/ai/rag-status", s.handleRAGProxy)
+	mux.HandleFunc("/api/gallery", s.handleGalleryList)
+	mux.HandleFunc("/api/gallery/image/", s.handleGalleryImage)
+	mux.HandleFunc("/api/gallery/delete/", s.handleGalleryDelete)
 	mux.HandleFunc("/api/resources/live", s.handleResourcesLive)
 	mux.HandleFunc("/api/envy/sysinfo", s.handleEnvySysinfo)
 
@@ -703,6 +708,20 @@ func (s *Server) handleImageGenerate(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
+
+	// Auto-save to gallery in background
+	go func() {
+		var genResult struct {
+			Image  string `json:"image"`
+			Prompt string `json:"prompt"`
+			Width  int    `json:"width"`
+			Height int    `json:"height"`
+		}
+		if err := json.Unmarshal(respBody, &genResult); err == nil && genResult.Image != "" {
+			s.saveToGallery(genResult.Image, genResult.Prompt, genResult.Width, genResult.Height)
+		}
+	}()
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(respBody)
 }
@@ -1371,4 +1390,126 @@ func (s *Server) handleRAGProxy(w http.ResponseWriter, r *http.Request) {
 	respBody, _ := io.ReadAll(resp.Body)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(respBody)
+}
+
+// ─── Gallery ────────────────────────────────────────────────────────────────
+
+const galleryDir = "/home/achilles1089/gallery"
+
+// saveToGallery saves a base64 PNG to the gallery directory with companion metadata.
+func (s *Server) saveToGallery(imageB64, prompt string, width, height int) {
+	os.MkdirAll(galleryDir, 0755)
+
+	// Strip data URI prefix if present
+	if idx := strings.Index(imageB64, ","); idx > 0 {
+		imageB64 = imageB64[idx+1:]
+	}
+
+	imgData, err := base64.StdEncoding.DecodeString(imageB64)
+	if err != nil {
+		fmt.Printf("[gallery] decode error: %v\n", err)
+		return
+	}
+
+	id := fmt.Sprintf("%d", time.Now().UnixMilli())
+	pngPath := filepath.Join(galleryDir, id+".png")
+	metaPath := filepath.Join(galleryDir, id+".json")
+
+	if err := os.WriteFile(pngPath, imgData, 0644); err != nil {
+		fmt.Printf("[gallery] save error: %v\n", err)
+		return
+	}
+
+	meta := map[string]interface{}{
+		"id":         id,
+		"prompt":     prompt,
+		"width":      width,
+		"height":     height,
+		"created_at": time.Now().Format(time.RFC3339),
+		"size_bytes": len(imgData),
+	}
+	metaJSON, _ := json.Marshal(meta)
+	os.WriteFile(metaPath, metaJSON, 0644)
+	fmt.Printf("[gallery] saved: %s (%d bytes)\n", id, len(imgData))
+}
+
+// handleGalleryList returns metadata for all gallery images, newest first.
+func (s *Server) handleGalleryList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	entries, err := os.ReadDir(galleryDir)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"images": []interface{}{}})
+		return
+	}
+
+	type galleryItem struct {
+		ID        string `json:"id"`
+		Prompt    string `json:"prompt"`
+		Width     int    `json:"width"`
+		Height    int    `json:"height"`
+		CreatedAt string `json:"created_at"`
+		SizeBytes int    `json:"size_bytes"`
+	}
+
+	var items []galleryItem
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(galleryDir, e.Name()))
+		if err != nil {
+			continue
+		}
+		var item galleryItem
+		if json.Unmarshal(data, &item) == nil {
+			items = append(items, item)
+		}
+	}
+
+	// Sort newest first
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].CreatedAt > items[j].CreatedAt
+	})
+
+	writeJSON(w, map[string]interface{}{"images": items})
+}
+
+// handleGalleryImage serves a gallery image file directly.
+func (s *Server) handleGalleryImage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	id := strings.TrimPrefix(r.URL.Path, "/api/gallery/image/")
+	if id == "" {
+		http.Error(w, "id required", 400)
+		return
+	}
+
+	pngPath := filepath.Join(galleryDir, id+".png")
+	if _, err := os.Stat(pngPath); os.IsNotExist(err) {
+		http.Error(w, "not found", 404)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFile(w, r, pngPath)
+}
+
+// handleGalleryDelete removes a gallery image and its metadata.
+func (s *Server) handleGalleryDelete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Methods", "DELETE, POST, OPTIONS")
+		w.WriteHeader(200)
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/api/gallery/delete/")
+	if id == "" {
+		writeJSON(w, map[string]interface{}{"error": "id required"})
+		return
+	}
+
+	os.Remove(filepath.Join(galleryDir, id+".png"))
+	os.Remove(filepath.Join(galleryDir, id+".json"))
+	writeJSON(w, map[string]interface{}{"deleted": id})
 }

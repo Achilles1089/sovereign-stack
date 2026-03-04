@@ -86,6 +86,12 @@ export default function AI() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [musicNodeOnline, setMusicNodeOnline] = useState(false);
 
+    // Gallery state
+    const [showGallery, setShowGallery] = useState(false);
+    const [galleryImages, setGalleryImages] = useState<Array<{ id: string; prompt: string; width: number; height: number; created_at: string; size_bytes: number }>>([]);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [galleryLoading, setGalleryLoading] = useState(false);
+
     // CRT color CSS variable
     const crtMain = crtColor === 'amber' ? '#cc8800' : '#22bb22';
     const crtDim = crtColor === 'amber' ? '#4a3000' : '#1a4a1a';
@@ -941,129 +947,196 @@ export default function AI() {
                         </div>
                     </div>
 
-                    <div className="chat-messages">
-                        {messages.map((msg, i) => {
-                            if (msg.role === 'system') {
-                                const content = msg.content || '';
-                                // Inline image rendering
-                                if (content.includes('<IMAGE>')) {
-                                    const imageMatch = content.match(/<IMAGE>(.*?)<\/IMAGE>/);
-                                    const caption = content.replace(/<IMAGE>.*?<\/IMAGE>\n?/, '').trim();
-                                    return (
-                                        <div key={i} className="chat-message assistant">
-                                            <div className="chat-bubble terminal-system-msg">
-                                                <div className="terminal-tool-call">
-                                                    <span className="terminal-tool-icon">🎨</span>
-                                                    <span>Image Generated</span>
-                                                </div>
-                                                {imageMatch && (
-                                                    <div className="terminal-image">
-                                                        <img src={imageMatch[1]} alt={caption} />
-                                                        <div className="terminal-image-meta">
-                                                            <span>{caption}</span>
+                    {showGallery ? (
+                        <div className="chat-messages" style={{ padding: 16, overflow: 'auto' }}>
+                            {galleryLoading ? (
+                                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading gallery...</div>
+                            ) : galleryImages.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                                    <div style={{ fontSize: 48, marginBottom: 12 }}>🖼️</div>
+                                    <div>No images yet. Use <code>/imagine &lt;prompt&gt;</code> to generate art.</div>
+                                </div>
+                            ) : (
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                                    gap: 12,
+                                    padding: 4,
+                                }}>
+                                    {galleryImages.map(img => (
+                                        <div
+                                            key={img.id}
+                                            style={{
+                                                position: 'relative',
+                                                borderRadius: 8,
+                                                overflow: 'hidden',
+                                                cursor: 'pointer',
+                                                background: 'rgba(0,0,0,0.3)',
+                                                border: '1px solid rgba(255,255,255,0.1)',
+                                                transition: 'transform 0.2s, box-shadow 0.2s',
+                                            }}
+                                            onClick={() => setSelectedImage(img.id)}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                                        >
+                                            <img
+                                                src={api.getGalleryImageUrl(img.id)}
+                                                alt={img.prompt}
+                                                loading="lazy"
+                                                style={{ width: '100%', display: 'block', aspectRatio: `${img.width}/${img.height}` }}
+                                            />
+                                            <div style={{
+                                                position: 'absolute', bottom: 0, left: 0, right: 0,
+                                                background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
+                                                padding: '20px 8px 8px',
+                                                fontSize: 11,
+                                                color: '#ccc',
+                                            }}>
+                                                {img.prompt?.slice(0, 60) || 'Untitled'}
+                                            </div>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); api.deleteGalleryImage(img.id).then(() => setGalleryImages(prev => prev.filter(g => g.id !== img.id))); }}
+                                                style={{
+                                                    position: 'absolute', top: 4, right: 4,
+                                                    background: 'rgba(255,0,0,0.6)', border: 'none', color: '#fff',
+                                                    borderRadius: 4, width: 24, height: 24, cursor: 'pointer',
+                                                    fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    opacity: 0.6, transition: 'opacity 0.2s',
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                                                onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
+                                                title="Delete image"
+                                            >✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="chat-messages">
+                            {messages.map((msg, i) => {
+                                if (msg.role === 'system') {
+                                    const content = msg.content || '';
+                                    // Inline image rendering
+                                    if (content.includes('<IMAGE>')) {
+                                        const imageMatch = content.match(/<IMAGE>(.*?)<\/IMAGE>/);
+                                        const caption = content.replace(/<IMAGE>.*?<\/IMAGE>\n?/, '').trim();
+                                        return (
+                                            <div key={i} className="chat-message assistant">
+                                                <div className="chat-bubble terminal-system-msg">
+                                                    <div className="terminal-tool-call">
+                                                        <span className="terminal-tool-icon">🎨</span>
+                                                        <span>Image Generated</span>
+                                                    </div>
+                                                    {imageMatch && (
+                                                        <div className="terminal-image">
+                                                            <img src={imageMatch[1]} alt={caption} />
+                                                            <div className="terminal-image-meta">
+                                                                <span>{caption}</span>
+                                                            </div>
                                                         </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    // Image generation progress
+                                    if (content.includes('<IMAGEPROGRESS>')) {
+                                        const promptText = content.replace('\n<IMAGEPROGRESS>', '').replace('🎨 Generating: ', '').replace('...', '');
+                                        return (
+                                            <div key={i} className="chat-message assistant">
+                                                <div className="chat-bubble terminal-system-msg">
+                                                    <div className="terminal-tool-call">
+                                                        <span className="terminal-tool-icon">🎨</span>
+                                                        <span>Generating: {promptText}...</span>
                                                     </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                }
-                                // Image generation progress
-                                if (content.includes('<IMAGEPROGRESS>')) {
-                                    const promptText = content.replace('\n<IMAGEPROGRESS>', '').replace('🎨 Generating: ', '').replace('...', '');
-                                    return (
-                                        <div key={i} className="chat-message assistant">
-                                            <div className="chat-bubble terminal-system-msg">
-                                                <div className="terminal-tool-call">
-                                                    <span className="terminal-tool-icon">🎨</span>
-                                                    <span>Generating: {promptText}...</span>
-                                                </div>
-                                                <div className="gen-progress-bar">
-                                                    <div className="gen-progress-fill" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-                                // Inline music player
-                                if (content.includes('<MUSIC>')) {
-                                    const audioMatch = content.match(/<MUSIC>(.*?)<\/MUSIC>/);
-                                    const caption = content.replace(/<MUSIC>.*?<\/MUSIC>\n?/, '').trim();
-                                    return (
-                                        <div key={i} className="chat-message assistant">
-                                            <div className="chat-bubble terminal-system-msg">
-                                                <div className="terminal-tool-call">
-                                                    <span className="terminal-tool-icon">🎵</span>
-                                                    <span>Music Generated</span>
-                                                </div>
-                                                {audioMatch && (
-                                                    <div style={{ margin: '8px 0' }}>
-                                                        <audio controls src={audioMatch[1]} style={{ width: '100%', height: 32 }} />
-                                                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{caption}</div>
+                                                    <div className="gen-progress-bar">
+                                                        <div className="gen-progress-fill" />
                                                     </div>
-                                                )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                }
-                                // Music generation progress
-                                if (content.includes('<MUSICPROGRESS>')) {
-                                    const promptText = content.replace('\n<MUSICPROGRESS>', '').replace('🎵 Generating: ', '').replace('...', '');
+                                        );
+                                    }
+                                    // Inline music player
+                                    if (content.includes('<MUSIC>')) {
+                                        const audioMatch = content.match(/<MUSIC>(.*?)<\/MUSIC>/);
+                                        const caption = content.replace(/<MUSIC>.*?<\/MUSIC>\n?/, '').trim();
+                                        return (
+                                            <div key={i} className="chat-message assistant">
+                                                <div className="chat-bubble terminal-system-msg">
+                                                    <div className="terminal-tool-call">
+                                                        <span className="terminal-tool-icon">🎵</span>
+                                                        <span>Music Generated</span>
+                                                    </div>
+                                                    {audioMatch && (
+                                                        <div style={{ margin: '8px 0' }}>
+                                                            <audio controls src={audioMatch[1]} style={{ width: '100%', height: 32 }} />
+                                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{caption}</div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    // Music generation progress
+                                    if (content.includes('<MUSICPROGRESS>')) {
+                                        const promptText = content.replace('\n<MUSICPROGRESS>', '').replace('🎵 Generating: ', '').replace('...', '');
+                                        return (
+                                            <div key={i} className="chat-message assistant">
+                                                <div className="chat-bubble terminal-system-msg">
+                                                    <div className="terminal-tool-call">
+                                                        <span className="terminal-tool-icon">🎵</span>
+                                                        <span>Generating: {promptText}...</span>
+                                                    </div>
+                                                    <div className="gen-progress-bar">
+                                                        <div className="gen-progress-fill" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
                                     return (
-                                        <div key={i} className="chat-message assistant">
-                                            <div className="chat-bubble terminal-system-msg">
-                                                <div className="terminal-tool-call">
-                                                    <span className="terminal-tool-icon">🎵</span>
-                                                    <span>Generating: {promptText}...</span>
-                                                </div>
-                                                <div className="gen-progress-bar">
-                                                    <div className="gen-progress-fill" />
-                                                </div>
+                                        <div key={i} className={`chat-message assistant ${!isHackerMode ? 'premium-chat-message' : ''}`}>
+                                            <div className={`chat-bubble terminal-system-msg ${!isHackerMode ? 'premium-chat-bubble' : ''}`}>{content}</div>
+                                        </div>
+                                    );
+                                }
+                                const isStreaming = isLoading && msg.role === 'assistant' && i === messages.length - 1;
+
+                                if (!isHackerMode) {
+                                    // Premium Bubble Render
+                                    return (
+                                        <div key={i} className={`premium-chat-message ${msg.role}`}>
+                                            <div className="premium-chat-bubble">
+                                                {msg.content || (isStreaming ? '...' : '')}
                                             </div>
                                         </div>
                                     );
                                 }
+
+                                // Hacker CRT Terminal Render
                                 return (
-                                    <div key={i} className={`chat-message assistant ${!isHackerMode ? 'premium-chat-message' : ''}`}>
-                                        <div className={`chat-bubble terminal-system-msg ${!isHackerMode ? 'premium-chat-bubble' : ''}`}>{content}</div>
+                                    <div key={i} className={`chat-message ${msg.role}`}>
+                                        <div className="chat-bubble">
+                                            {msg.role === 'user' ? (
+                                                <><span className="terminal-prompt">{'> '}</span>{msg.content}</>
+                                            ) : (
+                                                <>{msg.content || '...'}{isStreaming && <span className="terminal-cursor" />}</>
+                                            )}
+                                        </div>
                                     </div>
                                 );
-                            }
-                            const isStreaming = isLoading && msg.role === 'assistant' && i === messages.length - 1;
-
-                            if (!isHackerMode) {
-                                // Premium Bubble Render
-                                return (
-                                    <div key={i} className={`premium-chat-message ${msg.role}`}>
-                                        <div className="premium-chat-bubble">
-                                            {msg.content || (isStreaming ? '...' : '')}
-                                        </div>
-                                    </div>
-                                );
-                            }
-
-                            // Hacker CRT Terminal Render
-                            return (
-                                <div key={i} className={`chat-message ${msg.role}`}>
-                                    <div className="chat-bubble">
-                                        {msg.role === 'user' ? (
-                                            <><span className="terminal-prompt">{'> '}</span>{msg.content}</>
-                                        ) : (
-                                            <>{msg.content || '...'}{isStreaming && <span className="terminal-cursor" />}</>
-                                        )}
+                            })}
+                            {isLoading && messages[messages.length - 1]?.content === '' && (
+                                <div className={`chat-message assistant ${!isHackerMode ? 'premium-chat-message' : ''}`}>
+                                    <div className={`chat-bubble ${!isHackerMode ? 'premium-chat-bubble' : ''}`} style={isHackerMode ? { color: '#1a8a1a' } : {}}>
+                                        Processing{isHackerMode && <span className="terminal-cursor" />}
                                     </div>
                                 </div>
-                            );
-                        })}
-                        {isLoading && messages[messages.length - 1]?.content === '' && (
-                            <div className={`chat-message assistant ${!isHackerMode ? 'premium-chat-message' : ''}`}>
-                                <div className={`chat-bubble ${!isHackerMode ? 'premium-chat-bubble' : ''}`} style={isHackerMode ? { color: '#1a8a1a' } : {}}>
-                                    Processing{isHackerMode && <span className="terminal-cursor" />}
-                                </div>
-                            </div>
-                        )}
-                        <div ref={messagesEndRef} />
-                    </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+                    )}
 
                     <div className="terminal-input-container" style={!isHackerMode ? { background: 'var(--bg-card)', borderTop: '1px solid var(--border-primary)', padding: '16px' } : {}}>
                         {isHackerMode && <span className="terminal-input-prefix">C:\&gt;&nbsp;</span>}
@@ -1141,8 +1214,68 @@ export default function AI() {
                             <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ STOP</button>
                         )}
                         {voiceEnabled && <span style={{ fontSize: 10, color: 'var(--accent-green)', alignSelf: 'center' }}>🔊</span>}
+                        <button
+                            onClick={() => {
+                                const next = !showGallery;
+                                setShowGallery(next);
+                                if (next) {
+                                    setGalleryLoading(true);
+                                    api.getGalleryImages().then(res => setGalleryImages(res.images || [])).catch(() => { }).finally(() => setGalleryLoading(false));
+                                }
+                            }}
+                            style={{
+                                background: showGallery ? 'var(--accent-blue)' : 'transparent',
+                                border: '1px solid var(--border-primary)',
+                                color: showGallery ? '#fff' : 'var(--text-muted)',
+                                borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14,
+                                alignSelf: 'center',
+                            }}
+                            title={showGallery ? 'Back to chat' : 'Open gallery'}
+                        >{showGallery ? '💬 Chat' : '🖼️ Gallery'}</button>
                     </div>
                     <audio ref={audioRef} style={{ display: 'none' }} />
+
+                    {/* Image viewer overlay */}
+                    {selectedImage && (
+                        <div
+                            style={{
+                                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                                background: 'rgba(0,0,0,0.9)', zIndex: 9999,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer',
+                            }}
+                            onClick={() => setSelectedImage(null)}
+                        >
+                            <img
+                                src={api.getGalleryImageUrl(selectedImage)}
+                                alt=""
+                                style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8, boxShadow: '0 0 40px rgba(0,0,0,0.8)' }}
+                                onClick={e => e.stopPropagation()}
+                            />
+                            <button
+                                style={{
+                                    position: 'absolute', top: 20, right: 20,
+                                    background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
+                                    borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 16,
+                                }}
+                                onClick={() => setSelectedImage(null)}
+                            >✕ Close</button>
+                            <button
+                                style={{
+                                    position: 'absolute', bottom: 20, right: 20,
+                                    background: 'rgba(255,60,60,0.7)', border: 'none', color: '#fff',
+                                    borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 14,
+                                }}
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    api.deleteGalleryImage(selectedImage).then(() => {
+                                        setGalleryImages(prev => prev.filter(g => g.id !== selectedImage));
+                                        setSelectedImage(null);
+                                    });
+                                }}
+                            >🗑️ Delete</button>
+                        </div>
+                    )}
                     <input
                         ref={fileInputRef}
                         type="file"
