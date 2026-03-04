@@ -28,3 +28,13 @@ research/
 .swarm/
 sovereign-ios/models/
 dashboard/dist/
+docs/.credentials.md
+
+# AI Models (too large for git)
+*.gguf
+*.safetensors
+*.pth
+*.onnx
+*.bin
+models/
+sd_models/
