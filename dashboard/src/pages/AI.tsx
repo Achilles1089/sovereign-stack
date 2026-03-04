@@ -58,6 +58,9 @@ export default function AI() {
     const [contextSize, setContextSize] = useState(() =>
         parseInt(localStorage.getItem('context-size') || '10', 10)
     );
+    const [imageResolution, setImageResolution] = useState(() =>
+        (localStorage.getItem('image-resolution') || '256') as '256' | '512'
+    );
     // Image generation in-flight flag (used to disable input during gen)
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     // Image gen node status
@@ -247,10 +250,12 @@ export default function AI() {
                 return true;
             }
             // Show progress message
-            setMessages(prev => [...prev, { role: 'system', content: `🎨 Generating: ${prompt}...\n<IMAGEPROGRESS>` }]);
+            const imgSize = parseInt(imageResolution);
+            const estTime = imgSize === 256 ? '~20s' : '~75s';
+            setMessages(prev => [...prev, { role: 'system', content: `🎨 Generating: ${prompt} (${imgSize}x${imgSize}, ${estTime})...\n<IMAGEPROGRESS>` }]);
             setIsGeneratingImage(true);
             const startTime = Date.now();
-            api.generateImage(prompt).then(result => {
+            api.generateImage(prompt, imgSize, imgSize).then(result => {
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 setMessages(prev => {
                     const updated = [...prev];
@@ -587,10 +592,11 @@ export default function AI() {
                     <div className="chat-messages">
                         {messages.map((msg, i) => {
                             if (msg.role === 'system') {
+                                const content = msg.content || '';
                                 // Inline image rendering
-                                if (msg.content.includes('<IMAGE>')) {
-                                    const imageMatch = msg.content.match(/<IMAGE>(.*?)<\/IMAGE>/);
-                                    const caption = msg.content.replace(/<IMAGE>.*?<\/IMAGE>\n?/, '').trim();
+                                if (content.includes('<IMAGE>')) {
+                                    const imageMatch = content.match(/<IMAGE>(.*?)<\/IMAGE>/);
+                                    const caption = content.replace(/<IMAGE>.*?<\/IMAGE>\n?/, '').trim();
                                     return (
                                         <div key={i} className="chat-message assistant">
                                             <div className="chat-bubble terminal-system-msg">
@@ -611,8 +617,8 @@ export default function AI() {
                                     );
                                 }
                                 // Image generation progress
-                                if (msg.content.includes('<IMAGEPROGRESS>')) {
-                                    const promptText = msg.content.replace('\n<IMAGEPROGRESS>', '').replace('🎨 Generating: ', '').replace('...', '');
+                                if (content.includes('<IMAGEPROGRESS>')) {
+                                    const promptText = content.replace('\n<IMAGEPROGRESS>', '').replace('🎨 Generating: ', '').replace('...', '');
                                     return (
                                         <div key={i} className="chat-message assistant">
                                             <div className="chat-bubble terminal-system-msg">
@@ -629,7 +635,7 @@ export default function AI() {
                                 }
                                 return (
                                     <div key={i} className="chat-message assistant">
-                                        <div className="chat-bubble terminal-system-msg">{msg.content}</div>
+                                        <div className="chat-bubble terminal-system-msg">{content}</div>
                                     </div>
                                 );
                             }
@@ -660,13 +666,13 @@ export default function AI() {
                         <span className="terminal-input-prefix">C:\&gt;&nbsp;</span>
                         <input
                             className="chat-input"
-                            placeholder={phoneStatus?.running ? 'enter command...' : 'waiting for system...'}
+                            placeholder={'enter command or message...'}
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            disabled={isLoading || isGeneratingImage || !phoneStatus?.running}
+                            disabled={isLoading || isGeneratingImage}
                         />
-                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || isGeneratingImage || !phoneStatus?.running}>SEND</button>
+                        <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || isGeneratingImage}>SEND</button>
                         {isLoading && (
                             <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ STOP</button>
                         )}
@@ -879,14 +885,37 @@ export default function AI() {
                         />
                         <div className="setting-hint">Fewer = faster responses on small models</div>
                     </div>
+                    <div className="setting-block" style={{ marginTop: 12 }}>
+                        <div className="setting-label-row">
+                            <span className="setting-label">Image Resolution</span>
+                            <span className="setting-value">{imageResolution}x{imageResolution}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                            <button
+                                className={`btn btn-sm ${imageResolution === '256' ? 'btn-primary' : 'btn-outline'}`}
+                                onClick={() => { setImageResolution('256'); localStorage.setItem('image-resolution', '256'); }}
+                                style={{ flex: 1, fontSize: 11, padding: '4px 8px' }}
+                            >
+                                256 · Fast (~20s)
+                            </button>
+                            <button
+                                className={`btn btn-sm ${imageResolution === '512' ? 'btn-primary' : 'btn-outline'}`}
+                                onClick={() => { setImageResolution('512'); localStorage.setItem('image-resolution', '512'); }}
+                                style={{ flex: 1, fontSize: 11, padding: '4px 8px' }}
+                            >
+                                512 · Quality (~75s)
+                            </button>
+                        </div>
+                        <div className="setting-hint">/imagine resolution on brain net</div>
+                    </div>
                     {imageNodeOnline && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--accent-green)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--accent-green)', marginTop: 8 }}>
                             <span className="status-dot up" />
                             <span>Image Gen Node</span>
                         </div>
                     )}
                     {!imageNodeOnline && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
                             <span className="status-dot down" />
                             <span>Image Gen Offline</span>
                         </div>

@@ -26,3 +26,5 @@ Thumbs.db
 # Research (local only)
 research/
 .swarm/
+sovereign-ios/models/
+dashboard/dist/

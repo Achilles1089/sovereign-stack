@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,13 +124,18 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
+	// Try to get hardware info from brain net (the actual sovereign stack host)
+	// Uses the SSH tunnel on port 2222
+	if res := s.detectRemoteHardware(); res != nil {
+		writeJSON(w, res)
+		return
+	}
+	// Fallback to local detection
 	hw := &s.cfg.Hardware
-	// Live-detect hardware if config has no data (e.g., sovereign init was never run)
 	if hw.CPUCores == 0 || hw.RAMTotalMB == 0 {
 		detected, err := hardware.Detect()
 		if err == nil {
 			hw = detected
-			// Cache it in config so we don't re-detect every request
 			s.cfg.Hardware = *detected
 		}
 	}
@@ -143,6 +149,43 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 		"gpu_name":      hw.GPUName,
 		"gpu_memory_mb": hw.GPUMemoryMB,
 	})
+}
+
+func (s *Server) detectRemoteHardware() map[string]interface{} {
+	cmd := exec.Command("ssh", "-p", "2222", "-o", "ConnectTimeout=2", "-o", "StrictHostKeyChecking=no",
+		"achilles1089@localhost",
+		`cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d: -f2 | xargs && nproc && free -m | grep Mem | awk '{print $2, $7}' && df -BG / | tail -1 | awk '{print $2, $4}' | tr -d G`)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) < 4 {
+		return nil
+	}
+	cpuModel := strings.TrimSpace(lines[0])
+	cores, _ := strconv.Atoi(strings.TrimSpace(lines[1]))
+	memParts := strings.Fields(lines[2])
+	diskParts := strings.Fields(lines[3])
+	ramTotal := 0
+	if len(memParts) >= 1 {
+		ramTotal, _ = strconv.Atoi(memParts[0])
+	}
+	diskTotal, diskFree := 0, 0
+	if len(diskParts) >= 2 {
+		diskTotal, _ = strconv.Atoi(diskParts[0])
+		diskFree, _ = strconv.Atoi(diskParts[1])
+	}
+	return map[string]interface{}{
+		"cpu_model":     cpuModel,
+		"cpu_cores":     cores,
+		"ram_total_mb":  ramTotal,
+		"disk_total_gb": diskTotal,
+		"disk_free_gb":  diskFree,
+		"gpu_type":      "intel_uhd",
+		"gpu_name":      "Intel UHD 600",
+		"gpu_memory_mb": 0,
+	}
 }
 
 func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
@@ -470,7 +513,7 @@ func (s *Server) handleImageGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Proxy to sd_server
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: 180 * time.Second}
 	proxyReq, err := http.NewRequest("POST", fmt.Sprintf("http://%s/generate", imageHost), bytes.NewReader(body))
 	if err != nil {
 		writeJSON(w, map[string]interface{}{"error": err.Error()})

@@ -1,9 +1,30 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { Component, type ReactNode } from 'react';
 import './index.css';
 import Apps from './pages/Apps';
 import AI from './pages/AI';
 import Backups from './pages/Backups';
 import Settings from './pages/Settings';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 40, color: '#ff6b6b', fontFamily: 'monospace', background: '#1a1a2e', minHeight: '50vh' }}>
+          <h2>⚠️ Component Crash</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{this.state.error.message}</pre>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11, color: '#888', marginTop: 12 }}>{this.state.error.stack}</pre>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 20, padding: '8px 16px', cursor: 'pointer' }}>
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const TABS = [
   { path: '/', label: 'AI', icon: '🧠' },
@@ -37,12 +58,14 @@ function App() {
           <div className="top-bar-spacer" />
         </header>
         <main className="main-content">
-          <Routes>
-            <Route path="/" element={<AI />} />
-            <Route path="/apps" element={<Apps />} />
-            <Route path="/backups" element={<Backups />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<AI />} />
+              <Route path="/apps" element={<Apps />} />
+              <Route path="/backups" element={<Backups />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </ErrorBoundary>
         </main>
       </div>
     </BrowserRouter>

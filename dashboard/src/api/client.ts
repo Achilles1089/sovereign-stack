@@ -137,11 +137,11 @@ export const api = {
         body: JSON.stringify({ name }),
     }).then(r => r.json()),
 
-    generateImage: async (prompt: string): Promise<ImageGenResponse> => {
+    generateImage: async (prompt: string, width = 512, height = 512): Promise<ImageGenResponse> => {
         const res = await fetch(API_BASE + '/ai/image-generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, width: 512, height: 512 }),
+            body: JSON.stringify({ prompt, width, height }),
         });
         if (!res.ok) throw new Error(`Image gen error: ${res.status}`);
         return res.json();
