@@ -2,76 +2,79 @@
 
 > **Last updated:** 2026-03-04
 
-## Final Architecture
+## Final Architecture (v3)
 
 ```
-┌─────────────────────────────────────────────────────┐
-│            SOVEREIGN STACK v2 — FINAL               │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  🖼️🎵 Envy (i5-6200U, 8GB)         [MEDIA NODE]   │
-│     ├─ Image Gen (SDXS-512 OpenVINO)               │
-│     └─ Music Gen (MusicGen Small)                   │
-│                                                     │
-│  🧠 Brain Net (Celeron N4100, 8GB)  [BRAIN NODE]   │
-│     ├─ RWKV 2.9B Q4 (LLM)                          │
-│     ├─ Go Backend + Dashboard                       │
-│     └─ API Router / Orchestrator                    │
-│                                                     │
-│  🗣️ Phone (Android/T616)           [VOICE NODE]    │
-│     └─ Piper TTS (Text-to-Speech)                   │
-│                                                     │
-│  💻 Mac — Browser only (not part of stack)          │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│            SOVEREIGN STACK — 4 NODE FINAL              │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│  💻 Chromebook (N4500)                [REMOTE/CLIENT] │
+│     └─ Browser → Dashboard                            │
+│        Closed WiFi network, no internet needed         │
+│                                                        │
+│  🖼️ Brain Net (Celeron N4100)        [MEDIA + OPS]   │
+│     ├─ Image Gen (SDXS-512, OpenVINO)                 │
+│     ├─ Go Backend + Dashboard                          │
+│     └─ API Router / Orchestrator                       │
+│                                                        │
+│  🧠🎵 Envy (i5-6200U, AVX2)          [BRAIN + MUSIC] │
+│     ├─ LLM (RWKV-7 2.9B via llama-server)            │
+│     └─ Music Gen (Riffusion via sd binary)             │
+│                                                        │
+│  🗣️ Phone (T616)                     [VOICE]         │
+│     ├─ Whisper Tiny (STT)                              │
+│     └─ Piper TTS (Text-to-Speech)                      │
+│                                                        │
+└────────────────────────────────────────────────────────┘
 ```
 
-## Network
+## Network (Closed — No Internet)
 
 ```
-Brain Net ◄══ Ethernet 1Gbps ══► Envy
-  10.0.0.1                        10.0.0.2
-     │ USB
-  Phone (ADB)
-
-Mac connects via WiFi (Achilles New) to Brain Net dashboard
+Chromebook ──WiFi──► Brain Net (Orchestrator)
+                      ├── Ethernet 1Gbps ──► Envy (LLM + Music)
+                      └── USB ──► Phone (Voice)
 ```
+
+Brain Net hosts WiFi AP (hostapd) or all join local router with WAN unplugged.
 
 ---
 
-## Node 1: Brain Net Core (Mini PC) — BRAIN NODE
+## Node 1: Brain Net (Mini PC) — MEDIA + OPS
 
 | Spec | Value |
 |------|-------|
-| **Hostname** | `brainnet` |
-| **CPU** | Intel Celeron N4100 @ 1.10GHz (4c/4t, burst 2.4GHz) |
+| **CPU** | Intel Celeron N4100 @ 1.10GHz (4c/4t) |
 | **RAM** | 7.6 GB |
-| **Disk** | 57 GB (LVM) |
-| **GPU** | Intel UHD 600 (GeminiLake) |
-| **OS** | Ubuntu 24.04.4 LTS |
-| **Role** | LLM inference, orchestration, dashboard |
+| **GPU** | Intel UHD 600 (12 EUs, OpenVINO) |
+| **Role** | Image gen, orchestration, dashboard |
 
-## Node 2: HP Envy Laptop — MEDIA NODE
+## Node 2: HP Envy — BRAIN + MUSIC
 
 | Spec | Value |
 |------|-------|
-| **Hostname** | `envy` |
-| **CPU** | Intel Core i5-6200U @ 2.30GHz (2c/4t, AVX2) |
+| **CPU** | Intel Core i5-6200U @ 2.30GHz (2c/4t, **AVX2**) |
 | **RAM** | 7.7 GB |
-| **Disk** | 98 GB (93% free) |
-| **GPU** | Intel HD Graphics 520 (Skylake GT2) |
-| **OS** | Ubuntu 24.04.2 LTS |
-| **Role** | Image generation, music generation |
+| **GPU** | Intel HD 520 (24 EUs) |
+| **Role** | LLM inference (RWKV 2.9B), music gen (Riffusion) |
 
-## Node 3: Phone — VOICE NODE
+## Node 3: Phone — VOICE
 
 | Spec | Value |
 |------|-------|
-| **Model** | TBD (Android, Unisoc T616) |
-| **Connection** | USB to Brain Net |
-| **Role** | Text-to-Speech output (Piper TTS) |
+| **SoC** | Unisoc T616 (Cortex-A75 + A55) |
+| **RAM** | 6 GB |
+| **Role** | Whisper STT + Piper TTS |
 
----
+## Node 4: Samsung Chromebook XE345XDA — REMOTE
+
+| Spec | Value |
+|------|-------|
+| **CPU** | Intel Celeron N4500 (2c/2t) |
+| **RAM** | 4 GB |
+| **Role** | Browser client only — views dashboard on closed network |
 
 ## TODO (Future)
-- [ ] WireGuard mesh network — eliminate router dependency, encrypted P2P
+- [ ] WireGuard mesh — encrypted P2P, no router needed
+- [ ] Brain Net as WiFi AP (hostapd) — fully self-contained network
