@@ -46,7 +46,7 @@ type AIConfig struct {
 	Host         string `yaml:"host"`           // "localhost:8085" — llama-server address
 	PhoneHost    string `yaml:"phone_host"`     // "localhost:8085" via ADB forward
 	ModelsDir    string `yaml:"models_dir"`     // local GGUF models directory
-	ImageGenHost string `yaml:"image_gen_host"` // "192.168.1.x:8090" — mini PC running sd.cpp
+	ImageGenHost string `yaml:"image_gen_host"` // "10.0.0.2:8090" — Envy media node (image + music gen)
 }
 
 // BackupConfig holds backup settings
@@ -82,8 +82,9 @@ func DefaultConfig() *Config {
 			MinIO:       false,
 		},
 		AI: AIConfig{
-			Enabled: true,
-			Host:    "localhost:8085",
+			Enabled:      true,
+			Host:         "localhost:8085",
+			ImageGenHost: "10.0.0.2:8090",
 		},
 		Backup: BackupConfig{
 			Enabled:  true,

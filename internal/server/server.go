@@ -485,7 +485,7 @@ func (s *Server) handleAISwitch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"ok": true, "model": req.Model, "message": fmt.Sprintf("Switched to %s", req.Model)})
 }
 
-// handleImageGenerate proxies image generation requests to the mini PC's sd_server
+// handleImageGenerate proxies image generation requests to the Envy's sd_server
 func (s *Server) handleImageGenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -533,7 +533,7 @@ func (s *Server) handleImageGenerate(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 }
 
-// handleImageStatus checks if the image gen node (mini PC) is online
+// handleImageStatus checks if the Envy image gen node is online
 func (s *Server) handleImageStatus(w http.ResponseWriter, r *http.Request) {
 	imageHost := s.cfg.AI.ImageGenHost
 	if imageHost == "" {
