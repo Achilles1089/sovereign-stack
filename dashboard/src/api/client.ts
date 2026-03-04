@@ -274,4 +274,15 @@ export const api = {
         if (!res.ok) throw new Error(`Music gen error: ${res.status}`);
         return res.json();
     },
+
+    // Voice chat — full loop: audio → STT → LLM → TTS → audio response
+    voiceChat: async (audioBlob: Blob): Promise<{ transcript: string; response: string; audio: string; stt_ms: number; tts_ms: number; error?: string }> => {
+        const res = await fetch(API_BASE + '/ai/voice-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': audioBlob.type || 'audio/webm' },
+            body: audioBlob,
+        });
+        if (!res.ok) throw new Error(`Voice chat error: ${res.status}`);
+        return res.json();
+    },
 };

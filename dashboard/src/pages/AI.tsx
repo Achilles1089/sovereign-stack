@@ -964,7 +964,7 @@ export default function AI() {
                                     mediaRecorderRef.current?.stop();
                                     setIsRecording(false);
                                 } else {
-                                    // Start recording
+                                    // Start recording — voice chat mode
                                     try {
                                         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                                         const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -973,17 +973,33 @@ export default function AI() {
                                         recorder.onstop = async () => {
                                             stream.getTracks().forEach(t => t.stop());
                                             const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                                            setMessages(prev => [...prev, { role: 'system', content: '🎙️ Transcribing...' }]);
+                                            setMessages(prev => [...prev, { role: 'system', content: '🎙️ Processing voice...' }]);
+                                            setIsLoading(true);
                                             try {
-                                                const result = await api.transcribe(blob);
-                                                // Remove transcribing message and set input
-                                                setMessages(prev => prev.filter(m => m.content !== '🎙️ Transcribing...'));
-                                                if (result.text) {
-                                                    setInput(result.text.trim());
+                                                const result = await api.voiceChat(blob);
+                                                // Remove processing message
+                                                setMessages(prev => prev.filter(m => m.content !== '🎙️ Processing voice...'));
+                                                if (result.error && !result.transcript) {
+                                                    setMessages(prev => [...prev, { role: 'system', content: `[!] ${result.error}` }]);
+                                                } else {
+                                                    // Add user transcript and assistant response to chat
+                                                    if (result.transcript) {
+                                                        setMessages(prev => [...prev, { role: 'user', content: result.transcript }]);
+                                                    }
+                                                    if (result.response) {
+                                                        setMessages(prev => [...prev, { role: 'assistant', content: result.response }]);
+                                                    }
+                                                    // Play TTS audio
+                                                    if (result.audio && audioRef.current) {
+                                                        audioRef.current.src = result.audio;
+                                                        audioRef.current.play().catch(() => { });
+                                                    }
                                                 }
                                             } catch {
-                                                setMessages(prev => prev.filter(m => m.content !== '🎙️ Transcribing...'));
-                                                setMessages(prev => [...prev, { role: 'system', content: '[!] Transcription failed' }]);
+                                                setMessages(prev => prev.filter(m => m.content !== '🎙️ Processing voice...'));
+                                                setMessages(prev => [...prev, { role: 'system', content: '[!] Voice chat failed' }]);
+                                            } finally {
+                                                setIsLoading(false);
                                             }
                                         };
                                         recorder.start();
@@ -995,7 +1011,7 @@ export default function AI() {
                                 }
                             }}
                             disabled={isLoading || isGeneratingImage}
-                            title={isRecording ? 'Stop recording' : 'Voice input'}
+                            title={isRecording ? 'Stop recording' : 'Voice chat'}
                             style={{ minWidth: 40, fontSize: 16 }}
                         >
                             {isRecording ? '⏹' : '🎙️'}

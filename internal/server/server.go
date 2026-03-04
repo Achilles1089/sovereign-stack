@@ -73,6 +73,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/ai/image-status", s.handleImageStatus)
 	mux.HandleFunc("/api/ai/transcribe", s.handleTranscribe)
 	mux.HandleFunc("/api/ai/speak", s.handleSpeak)
+	mux.HandleFunc("/api/ai/voice-chat", s.handleVoiceChat)
 	mux.HandleFunc("/api/ai/voice-status", s.handleVoiceStatus)
 	mux.HandleFunc("/api/ai/music-generate", s.handleMusicGenerate)
 	mux.HandleFunc("/api/ai/music-status", s.handleMusicStatus)
@@ -1096,7 +1097,125 @@ func (s *Server) handleSpeak(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 }
 
-// handleVoiceStatus checks if the voice pipeline is online
+// handleVoiceChat chains STT → LLM → TTS in a single request.
+// Accepts raw audio blob, returns {transcript, response, audio}.
+func (s *Server) handleVoiceChat(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(200)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	voiceHost := s.cfg.AI.VoiceHost
+	if voiceHost == "" {
+		writeJSON(w, map[string]interface{}{"error": "voice_host not configured"})
+		return
+	}
+
+	// Step 1: Forward audio to Whisper STT
+	audioBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to read audio"})
+		return
+	}
+
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	sttReq, _ := http.NewRequest("POST", fmt.Sprintf("http://%s/transcribe", voiceHost), bytes.NewReader(audioBody))
+	sttReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+
+	sttResp, err := httpClient.Do(sttReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("STT failed: %s", err.Error())})
+		return
+	}
+	defer sttResp.Body.Close()
+
+	var sttResult struct {
+		Text   string `json:"text"`
+		Error  string `json:"error"`
+		TimeMs int    `json:"time_ms"`
+	}
+	if err := json.NewDecoder(sttResp.Body).Decode(&sttResult); err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to parse STT response"})
+		return
+	}
+	if sttResult.Error != "" {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("STT: %s", sttResult.Error)})
+		return
+	}
+
+	transcript := strings.TrimSpace(sttResult.Text)
+	if transcript == "" {
+		writeJSON(w, map[string]interface{}{"error": "no speech detected"})
+		return
+	}
+
+	// Step 2: Send transcript to Phone LLM (collect full response)
+	messages := []ai.ChatMessage{
+		{Role: "user", Content: transcript},
+	}
+
+	var llmResponse strings.Builder
+	err = s.client.Chat("", messages, func(content string, done bool) {
+		llmResponse.WriteString(content)
+	})
+	if err != nil {
+		writeJSON(w, map[string]interface{}{
+			"error":      fmt.Sprintf("LLM failed: %s", err.Error()),
+			"transcript": transcript,
+		})
+		return
+	}
+
+	responseText := strings.TrimSpace(llmResponse.String())
+	if responseText == "" {
+		writeJSON(w, map[string]interface{}{
+			"transcript": transcript,
+			"response":   "",
+			"error":      "LLM returned empty response",
+		})
+		return
+	}
+
+	// Step 3: Send LLM response to Piper TTS
+	ttsBody, _ := json.Marshal(map[string]string{"text": responseText})
+	ttsClient := &http.Client{Timeout: 30 * time.Second}
+	ttsReq, _ := http.NewRequest("POST", fmt.Sprintf("http://%s/speak", voiceHost), bytes.NewReader(ttsBody))
+	ttsReq.Header.Set("Content-Type", "application/json")
+
+	ttsResp, err := ttsClient.Do(ttsReq)
+	if err != nil {
+		// Return text even if TTS fails
+		writeJSON(w, map[string]interface{}{
+			"transcript": transcript,
+			"response":   responseText,
+			"error":      fmt.Sprintf("TTS failed: %s", err.Error()),
+		})
+		return
+	}
+	defer ttsResp.Body.Close()
+
+	var ttsResult struct {
+		Audio  string `json:"audio"`
+		Error  string `json:"error"`
+		TimeMs int    `json:"time_ms"`
+	}
+	json.NewDecoder(ttsResp.Body).Decode(&ttsResult)
+
+	writeJSON(w, map[string]interface{}{
+		"transcript": transcript,
+		"response":   responseText,
+		"audio":      ttsResult.Audio,
+		"stt_ms":     sttResult.TimeMs,
+		"tts_ms":     ttsResult.TimeMs,
+	})
+}
 func (s *Server) handleVoiceStatus(w http.ResponseWriter, r *http.Request) {
 	voiceHost := s.cfg.AI.VoiceHost
 	if voiceHost == "" {
