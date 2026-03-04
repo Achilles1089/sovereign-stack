@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { api, type AIModel, type AIStatus, type SystemResources, type ServiceStatus, type CatalogEntry, type PhoneStatus, type PhoneModel } from '../api/client';
+import { api, type AIModel, type AIStatus, type SystemResources, type ServiceStatus, type CatalogEntry, type PhoneStatus, type PhoneModel, type BrainNetLive, type EnvySysinfo } from '../api/client';
 
 interface Message {
     role: 'user' | 'assistant' | 'system';
@@ -12,6 +12,8 @@ const TERMINAL_COMMANDS = [
     { cmd: '/status', desc: 'Show system info' },
     { cmd: '/use', desc: 'Switch model (e.g. /use qwen3b)' },
     { cmd: '/imagine', desc: 'Generate image (e.g. /imagine sunset)' },
+    { cmd: '/voice', desc: 'Toggle voice mode (auto-speak responses)' },
+    { cmd: '/music', desc: 'Generate music (e.g. /music ambient piano)' },
     { cmd: '/clear', desc: 'Clear terminal' },
     { cmd: '/help', desc: 'Show available commands' },
 ];
@@ -31,7 +33,7 @@ export default function AI() {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [models, setModels] = useState<AIModel[]>([]);
-    const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
+    const [_aiStatus, setAiStatus] = useState<AIStatus | null>(null);
     const [resources, setResources] = useState<SystemResources | null>(null);
     const [services, setServices] = useState<ServiceStatus[]>([]);
     const [activeModel, setActiveModel] = useState('');
@@ -45,6 +47,13 @@ export default function AI() {
         (localStorage.getItem('crt-color') as 'green' | 'amber') || 'green'
     );
     const [booted, setBooted] = useState(false);
+    const [isHackerMode, setIsHackerMode] = useState(() => localStorage.getItem('hacker-mode') === 'true');
+
+    // Save hacker mode preference
+    useEffect(() => {
+        localStorage.setItem('hacker-mode', String(isHackerMode));
+    }, [isHackerMode]);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
     const historyRef = useRef<string[]>([]);
@@ -65,6 +74,15 @@ export default function AI() {
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     // Image gen node status
     const [imageNodeOnline, setImageNodeOnline] = useState(false);
+    const [brainLive, setBrainLive] = useState<BrainNetLive | null>(null);
+    const [envySysinfo, setEnvySysinfo] = useState<EnvySysinfo | null>(null);
+    // Voice pipeline state
+    const [isRecording, setIsRecording] = useState(false);
+    const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('voice-mode') === 'true');
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [musicNodeOnline, setMusicNodeOnline] = useState(false);
 
     // CRT color CSS variable
     const crtMain = crtColor === 'amber' ? '#cc8800' : '#22bb22';
@@ -111,11 +129,17 @@ export default function AI() {
         }).catch(() => { });
         api.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => { });
 
+        // Initial live stats
+        api.getBrainNetLive().then(d => setBrainLive(d)).catch(() => { });
+        api.getEnvySysinfo().then(d => setEnvySysinfo(d)).catch(() => { });
+
         const interval = setInterval(() => {
             fetchSystem();
             fetchPhoneStatus();
-            // Check image gen node
             api.getImageStatus().then(d => setImageNodeOnline(d.online)).catch(() => setImageNodeOnline(false));
+            api.getMusicStatus().then(d => setMusicNodeOnline(d.online)).catch(() => setMusicNodeOnline(false));
+            api.getBrainNetLive().then(d => setBrainLive(d)).catch(() => { });
+            api.getEnvySysinfo().then(d => setEnvySysinfo(d)).catch(() => { });
         }, 15000);
         // Initial image node check
         api.getImageStatus().then(d => setImageNodeOnline(d.online)).catch(() => setImageNodeOnline(false));
@@ -286,6 +310,54 @@ export default function AI() {
             });
             return true;
         }
+        if (command === '/voice') {
+            const next = !voiceEnabled;
+            setVoiceEnabled(next);
+            localStorage.setItem('voice-mode', String(next));
+            setMessages(prev => [...prev, { role: 'system', content: `Voice mode ${next ? 'ON — responses will be spoken' : 'OFF'}` }]);
+            return true;
+        }
+        if (command === '/music') {
+            const prompt = parts.slice(1).join(' ');
+            if (!prompt) {
+                setMessages(prev => [...prev, { role: 'system', content: 'Usage: /music <description>\nExample: /music ambient piano with rain sounds' }]);
+                return true;
+            }
+            if (!musicNodeOnline) {
+                setMessages(prev => [...prev, { role: 'system', content: '[!] Music gen node offline. Start music_server on Envy.' }]);
+                return true;
+            }
+            setMessages(prev => [...prev, { role: 'system', content: `🎵 Generating: ${prompt}...\n<MUSICPROGRESS>` }]);
+            setIsGeneratingImage(true);
+            const startTime = Date.now();
+            api.generateMusic(prompt).then(result => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                setMessages(prev => {
+                    const updated = [...prev];
+                    let idx = -1;
+                    for (let j = updated.length - 1; j >= 0; j--) {
+                        if (updated[j].content.includes('<MUSICPROGRESS>')) { idx = j; break; }
+                    }
+                    if (idx >= 0) {
+                        updated[idx] = { role: 'system', content: `<MUSIC>${result.audio}</MUSIC>\n🎵 ${prompt} — ${elapsed}s (${result.duration_s}s audio)` };
+                    }
+                    return updated;
+                });
+            }).catch(() => {
+                setMessages(prev => {
+                    const updated = [...prev];
+                    let idx = -1;
+                    for (let j = updated.length - 1; j >= 0; j--) {
+                        if (updated[j].content.includes('<MUSICPROGRESS>')) { idx = j; break; }
+                    }
+                    if (idx >= 0) {
+                        updated[idx] = { role: 'system', content: '[!] Music generation failed.' };
+                    }
+                    return updated;
+                });
+            }).finally(() => setIsGeneratingImage(false));
+            return true;
+        }
         return false;
     };
 
@@ -369,6 +441,23 @@ export default function AI() {
         }
         abortRef.current = null;
         setIsLoading(false);
+
+        // Auto-speak the response if voice mode is on
+        if (voiceEnabled) {
+            // We need to get the latest message from state — use a callback pattern
+            setMessages(prev => {
+                const assistantMsg = prev[prev.length - 1];
+                if (assistantMsg?.role === 'assistant' && assistantMsg.content) {
+                    api.speak(assistantMsg.content.slice(0, 500)).then(result => {
+                        if (result.audio && audioRef.current) {
+                            audioRef.current.src = result.audio;
+                            audioRef.current.play().catch(() => { });
+                        }
+                    }).catch(() => { });
+                }
+                return prev;
+            });
+        }
     };
 
     const handleStop = () => {
@@ -404,47 +493,244 @@ export default function AI() {
 
 
 
+    const formatUptime = (secs: number) => {
+        const d = Math.floor(secs / 86400);
+        const h = Math.floor((secs % 86400) / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        if (d > 0) return `${d}d ${h}h`;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+    };
+
+    const UsageBar = ({ label, used, total, unit }: { label: string; used: number; total: number; unit: string }) => {
+        const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+        const color = pct > 80 ? 'var(--accent-red)' : pct > 60 ? 'var(--accent-amber)' : 'var(--accent-green)';
+        return (
+            <div style={{ margin: '4px 0 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
+                    <span>{label}</span>
+                    <span className="mono">{used}{unit} / {total}{unit}</span>
+                </div>
+                <div className="progress-bar" style={{ marginTop: 2, height: 4 }}>
+                    <div className="progress-fill" style={{ width: `${pct}%`, background: color }} />
+                </div>
+            </div>
+        );
+    };
+
     const runningCount = services.filter(s => s.running).length;
     const ramGB = resources ? (resources.ram_total_mb / 1024).toFixed(1) : '?';
-    const diskUsedGB = resources ? Math.round(resources.disk_total_gb - resources.disk_free_gb) : 0;
-    const diskPercent = resources ? Math.round(diskUsedGB / resources.disk_total_gb * 100) : 0;
+
+    // Brain Net live computed values
+    const brainRamUsed = brainLive ? Math.round((brainLive.ram_total_mb - brainLive.ram_available_mb) / 1024 * 10) / 10 : null;
+    const brainRamTotal = brainLive ? Math.round(brainLive.ram_total_mb / 1024 * 10) / 10 : null;
+    const brainDiskUsed = brainLive ? brainLive.disk_total_gb - brainLive.disk_free_gb : null;
+
+    // Envy computed values
+    const envyRamUsed = envySysinfo?.ram_total_mb && envySysinfo?.ram_available_mb
+        ? Math.round((envySysinfo.ram_total_mb - envySysinfo.ram_available_mb) / 1024 * 10) / 10 : null;
+    const envyRamTotal = envySysinfo?.ram_total_mb ? Math.round(envySysinfo.ram_total_mb / 1024 * 10) / 10 : null;
+    const envyDiskUsed = envySysinfo?.disk_total_gb && envySysinfo?.disk_free_gb
+        ? envySysinfo.disk_total_gb - envySysinfo.disk_free_gb : null;
+
+    // Phone computed values
+    const phoneRamUsed = phoneStatus?.phone_ram_total_mb && phoneStatus?.phone_ram_available_mb
+        ? Math.round((phoneStatus.phone_ram_total_mb - phoneStatus.phone_ram_available_mb) / 1024 * 10) / 10 : null;
+    const phoneRamTotal = phoneStatus?.phone_ram_total_mb ? Math.round(phoneStatus.phone_ram_total_mb / 1024 * 10) / 10 : null;
+    const phoneStorageUsed = phoneStatus?.phone_storage_free_gb != null
+        ? 112 - phoneStatus.phone_storage_free_gb : null;
 
     return (
         <div className="ai-layout">
-            {/* LEFT PANEL — System + Services + AI Engine */}
+            {/* LEFT PANEL — Cluster Nodes */}
             <aside className="ai-panel-left">
-                <div className="card compact">
-                    <div className="card-title">System</div>
-                    <div className="mini-stats">
-                        <div className="mini-stat">
-                            <span className="mini-stat-value" style={{ color: 'var(--accent-green)' }}>{runningCount}/{services.length}</span>
-                            <span className="mini-stat-label">Services</span>
-                        </div>
-                        <div className="mini-stat">
-                            <span className="mini-stat-value">{resources?.cpu_cores || '?'}</span>
-                            <span className="mini-stat-label">CPU Cores</span>
-                        </div>
-                        <div className="mini-stat">
-                            <span className="mini-stat-value" style={{ color: 'var(--accent-cyan)' }}>{ramGB}G</span>
-                            <span className="mini-stat-label">RAM</span>
-                        </div>
-                        <div className="mini-stat">
-                            <span className="mini-stat-value" style={{ color: 'var(--accent-primary)' }}>{resources?.disk_free_gb || '?'}G</span>
-                            <span className="mini-stat-label">Disk Free</span>
-                        </div>
-                    </div>
+                <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: -4 }}>
+                    Cluster Nodes
+                </div>
 
-                    <div style={{ margin: '12px 0 8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)' }}>
-                            <span>Disk</span>
-                            <span className="mono">{diskUsedGB}/{resources?.disk_total_gb || 0}GB</span>
+                {/* 🔧 Brain Net — OPS + VOICE */}
+                <div className="node-card node-card-brain">
+                    <div className="node-header">
+                        <div>
+                            <div className="node-name">🔧 Brain Net</div>
+                            <div className="node-role">OPS + VOICE</div>
                         </div>
-                        <div className="progress-bar" style={{ marginTop: 4 }}>
-                            <div className="progress-fill disk" style={{ width: `${diskPercent}%` }} />
+                        <span className={`badge badge-sm ${runningCount > 0 ? 'badge-green' : 'badge-red'}`}>
+                            <span className={`status-dot ${runningCount > 0 ? 'up' : 'down'}`} />
+                        </span>
+                    </div>
+                    <div className="node-specs">Celeron N4100 · {ramGB}G RAM</div>
+                    <div className="node-service-row">
+                        <span className="service-label">Dashboard</span>
+                        <span className="service-status">
+                            <span className="status-dot up" /> Online
+                        </span>
+                    </div>
+                    <div className="node-service-row">
+                        <span className="service-label">Whisper STT</span>
+                        <span className="service-status">
+                            <span className={`status-dot ${services.find(s => s.name.includes('whisper'))?.running !== false ? 'up' : 'down'}`} />
+                            {services.find(s => s.name.includes('whisper'))?.running !== false ? 'Ready' : 'Offline'}
+                        </span>
+                    </div>
+                    <div className="node-service-row">
+                        <span className="service-label">Piper TTS</span>
+                        <span className="service-status">
+                            <span className={`status-dot ${services.find(s => s.name.includes('piper'))?.running !== false ? 'up' : 'down'}`} />
+                            {services.find(s => s.name.includes('piper'))?.running !== false ? 'Ready' : 'Offline'}
+                        </span>
+                    </div>
+                    {brainRamUsed != null && brainRamTotal != null && (
+                        <UsageBar label="RAM" used={brainRamUsed} total={brainRamTotal} unit="G" />
+                    )}
+                    {brainDiskUsed != null && brainLive && (
+                        <UsageBar label="Disk" used={brainDiskUsed} total={brainLive.disk_total_gb} unit="G" />
+                    )}
+                    {brainLive && (
+                        <div className="node-service-row" style={{ marginTop: 4 }}>
+                            <span className="service-label">Load</span>
+                            <span className="service-status mono" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                                {brainLive.load_1m.toFixed(2)}
+                            </span>
                         </div>
+                    )}
+                    {brainLive && brainLive.temp_c > 0 && (
+                        <div className="node-service-row">
+                            <span className="service-label">Temp</span>
+                            <span className="service-status mono" style={{
+                                color: brainLive.temp_c > 70 ? 'var(--accent-red)' : brainLive.temp_c > 55 ? 'var(--accent-amber)' : 'var(--text-muted)',
+                                fontSize: 10
+                            }}>{brainLive.temp_c}°C</span>
+                        </div>
+                    )}
+                    {brainLive && (
+                        <div className="node-service-row">
+                            <span className="service-label">Uptime</span>
+                            <span className="service-status mono" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                                {formatUptime(brainLive.uptime_secs)}
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                {/* 🖼️ Envy — MEDIA */}
+                <div className="node-card node-card-envy">
+                    <div className="node-header">
+                        <div>
+                            <div className="node-name">🖼️ Envy</div>
+                            <div className="node-role">MEDIA</div>
+                        </div>
+                        <span className={`badge badge-sm ${imageNodeOnline || musicNodeOnline ? 'badge-green' : 'badge-red'}`}>
+                            <span className={`status-dot ${imageNodeOnline || musicNodeOnline ? 'up' : 'down'}`} />
+                        </span>
+                    </div>
+                    <div className="node-specs">{envySysinfo?.cpu_model ? envySysinfo.cpu_model.replace('Intel(R) Core(TM) ', '').replace(' CPU', '') : 'i5-6200U'} · {envyRamTotal || '7.8'}G RAM</div>
+                    <div className="node-service-row">
+                        <span className="service-label">Image Gen</span>
+                        <span className="service-status" style={{ color: imageNodeOnline ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                            <span className={`status-dot ${imageNodeOnline ? 'up' : 'down'}`} />
+                            {imageNodeOnline ? 'Online' : 'Offline'}
+                        </span>
+                    </div>
+                    <div className="node-service-row">
+                        <span className="service-label">Music Gen</span>
+                        <span className="service-status" style={{ color: musicNodeOnline ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                            <span className={`status-dot ${musicNodeOnline ? 'up' : 'down'}`} />
+                            {musicNodeOnline ? 'Online' : 'Offline'}
+                        </span>
+                    </div>
+                    {envyRamUsed != null && envyRamTotal != null && (
+                        <UsageBar label="RAM" used={envyRamUsed} total={envyRamTotal} unit="G" />
+                    )}
+                    {envyDiskUsed != null && envySysinfo?.disk_total_gb && (
+                        <UsageBar label="Disk" used={envyDiskUsed} total={envySysinfo.disk_total_gb} unit="G" />
+                    )}
+                    {envySysinfo?.load_1m != null && (
+                        <div className="node-service-row" style={{ marginTop: 4 }}>
+                            <span className="service-label">Load</span>
+                            <span className="service-status mono" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                                {envySysinfo.load_1m.toFixed(2)}
+                            </span>
+                        </div>
+                    )}
+                    {envySysinfo?.temp_c != null && envySysinfo.temp_c > 0 && (
+                        <div className="node-service-row">
+                            <span className="service-label">Temp</span>
+                            <span className="service-status mono" style={{
+                                color: envySysinfo.temp_c > 70 ? 'var(--accent-red)' : envySysinfo.temp_c > 55 ? 'var(--accent-amber)' : 'var(--text-muted)',
+                                fontSize: 10
+                            }}>{envySysinfo.temp_c}°C</span>
+                        </div>
+                    )}
+                    {envySysinfo?.uptime_secs != null && (
+                        <div className="node-service-row">
+                            <span className="service-label">Uptime</span>
+                            <span className="service-status mono" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                                {formatUptime(envySysinfo.uptime_secs)}
+                            </span>
+                        </div>
+                    )}
+                    <div className="node-service-row" style={{ marginTop: 2 }}>
+                        <span className="service-label">Link</span>
+                        <span className="service-status" style={{ color: 'var(--text-muted)' }}>Ethernet 1Gbps</span>
                     </div>
                 </div>
 
+                {/* 🧠 Phone — LLM */}
+                <div className="node-card node-card-phone">
+                    <div className="node-header">
+                        <div>
+                            <div className="node-name">🧠 Phone</div>
+                            <div className="node-role">LLM</div>
+                        </div>
+                        <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
+                            <span className={`status-dot ${phoneStatus?.running ? 'up' : 'down'}`} />
+                        </span>
+                    </div>
+                    <div className="node-specs">
+                        {phoneStatus?.soc || 'T616'} · {phoneStatus?.phone_ram_total_mb ? `${(phoneStatus.phone_ram_total_mb / 1024).toFixed(1)}G RAM` : '6G RAM'}
+                    </div>
+                    <div className="node-service-row">
+                        <span className="service-label">Active Model</span>
+                        <span className="service-status" style={{ color: phoneStatus?.running ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                            <span className={`status-dot ${phoneStatus?.running ? 'up' : 'down'}`} />
+                            {phoneStatus?.display_name || (phoneStatus?.running ? 'Running' : 'Offline')}
+                        </span>
+                    </div>
+                    {phoneStatus?.phone_cpu_cores && phoneStatus.phone_cpu_cores > 0 && (
+                        <div className="node-service-row">
+                            <span className="service-label">CPU</span>
+                            <span className="service-status" style={{ color: 'var(--text-muted)' }}>{phoneStatus.phone_cpu_cores} cores</span>
+                        </div>
+                    )}
+                    {phoneStatus?.android_version && (
+                        <div className="node-service-row">
+                            <span className="service-label">Android</span>
+                            <span className="service-status" style={{ color: 'var(--text-muted)' }}>{phoneStatus.android_version}</span>
+                        </div>
+                    )}
+                    {phoneStatus?.battery_pct != null && phoneStatus.battery_pct >= 0 && (
+                        <div className="node-service-row">
+                            <span className="service-label">Battery</span>
+                            <span className="service-status" style={{
+                                color: phoneStatus.battery_pct > 50 ? 'var(--accent-green)' :
+                                    phoneStatus.battery_pct > 20 ? 'var(--accent-amber)' : 'var(--accent-red)'
+                            }}>{phoneStatus.battery_pct}%</span>
+                        </div>
+                    )}
+                    {phoneRamUsed != null && phoneRamTotal != null && (
+                        <UsageBar label="RAM" used={phoneRamUsed} total={phoneRamTotal} unit="G" />
+                    )}
+                    {phoneStorageUsed != null && (
+                        <UsageBar label="Storage" used={phoneStorageUsed} total={112} unit="G" />
+                    )}
+                    <div className="node-service-row" style={{ marginTop: 2 }}>
+                        <span className="service-label">Link</span>
+                        <span className="service-status" style={{ color: 'var(--text-muted)' }}>USB / ADB</span>
+                    </div>
+                </div>
+
+                {/* Services */}
                 <div className="card compact">
                     <div className="card-title">Services</div>
                     {services.length === 0 ? (
@@ -463,76 +749,6 @@ export default function AI() {
                         </div>
                     )}
                 </div>
-
-                <div className="card compact">
-                    <div className="card-title">Hardware</div>
-                    <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                        <div style={{ color: 'var(--text-muted)' }}>CPU</div>
-                        <div className="mono" style={{ fontSize: 11 }}>{resources?.cpu_model || 'Unknown'}</div>
-                        <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>GPU</div>
-                        <div style={{ fontSize: 12 }}>{resources?.gpu_name || 'CPU Only'}</div>
-                        <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Tier</div>
-                        <div style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{aiStatus?.gpu_tier || 'cpu'}</div>
-                    </div>
-                </div>
-
-                {/* Phone Hardware */}
-                {phoneStatus?.phone_model && (
-                    <div className="card compact">
-                        <div className="card-title">Phone Hardware</div>
-                        <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                            <div style={{ color: 'var(--text-muted)' }}>Device</div>
-                            <div className="mono" style={{ fontSize: 11, color: 'var(--accent-cyan)' }}>{phoneStatus.phone_model}</div>
-                            {phoneStatus.soc && (
-                                <>
-                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>SoC</div>
-                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.soc}</div>
-                                </>
-                            )}
-                            {phoneStatus.phone_cpu_cores && phoneStatus.phone_cpu_cores > 0 && (
-                                <>
-                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>CPU</div>
-                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.phone_cpu_cores} cores</div>
-                                </>
-                            )}
-                            {phoneStatus.phone_ram_total_mb && phoneStatus.phone_ram_total_mb > 0 && (
-                                <>
-                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>RAM</div>
-                                    <div className="mono" style={{ fontSize: 11 }}>
-                                        {(phoneStatus.phone_ram_total_mb / 1024).toFixed(1)}G
-                                        {phoneStatus.phone_ram_available_mb ? (
-                                            <span style={{ color: 'var(--text-muted)' }}> / {(phoneStatus.phone_ram_available_mb / 1024).toFixed(1)}G free</span>
-                                        ) : null}
-                                    </div>
-                                </>
-                            )}
-                            {phoneStatus.phone_storage_free_gb != null && phoneStatus.phone_storage_free_gb > 0 && (
-                                <>
-                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Storage</div>
-                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.phone_storage_free_gb}G free</div>
-                                </>
-                            )}
-                            {phoneStatus.battery_pct != null && phoneStatus.battery_pct >= 0 && (
-                                <>
-                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Battery</div>
-                                    <div className="mono" style={{
-                                        fontSize: 11,
-                                        color: phoneStatus.battery_pct > 50 ? 'var(--accent-green)' :
-                                            phoneStatus.battery_pct > 20 ? 'var(--accent-primary)' : 'var(--accent-red)'
-                                    }}>
-                                        {phoneStatus.battery_pct}%
-                                    </div>
-                                </>
-                            )}
-                            {phoneStatus.android_version && (
-                                <>
-                                    <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>Android</div>
-                                    <div className="mono" style={{ fontSize: 11 }}>{phoneStatus.android_version}</div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
             </aside>
 
             {/* CENTER — AI Chat */}
@@ -551,11 +767,10 @@ export default function AI() {
                     <div className="terminal-header">
                         <span className="terminal-header-title">SOVEREIGN-OS v1.0 ─── {phoneStatus?.running ? 'READY' : 'OFFLINE'}</span>
                         <div className="terminal-header-status">
-                            {phoneStatus && (phoneStatus.phone_ram_available_mb ?? 0) > 0 && (
+                            {phoneStatus?.running && (
                                 <span style={{ color: crtDim, fontSize: 10 }}>
-                                    RAM:{((phoneStatus.phone_ram_available_mb ?? 0) / 1024).toFixed(1)}G
-                                    {phoneStatus.soc ? ` │ ${phoneStatus.soc}` : ''}
-                                    {phoneStatus.battery_pct != null && phoneStatus.battery_pct >= 0 ? ` │ ${phoneStatus.battery_pct}%` : ''}
+                                    {formatParams(phoneStatus.params)} │ {formatContext(phoneStatus.context)}ctx
+                                    {phoneStatus.model ? ` │ ${phoneStatus.model.replace('.gguf', '').split('-').pop()?.toUpperCase()}` : ''}
                                 </span>
                             )}
                             {imageNodeOnline && (
@@ -573,19 +788,36 @@ export default function AI() {
                                 CLR
                             </button>
                             <button
-                                onClick={() => {
-                                    const next = crtColor === 'green' ? 'amber' : 'green';
-                                    setCrtColor(next);
-                                    localStorage.setItem('crt-color', next);
-                                }}
-                                title={`Switch to ${crtColor === 'green' ? 'amber' : 'green'} CRT`}
+                                onClick={() => setIsHackerMode(!isHackerMode)}
+                                title={`Switch to ${isHackerMode ? 'Premium' : 'Hacker'} Mode`}
                                 style={{
-                                    background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12,
-                                    color: crtColor === 'green' ? '#cc8800' : '#22bb22', padding: '0 4px',
+                                    background: isHackerMode ? 'rgba(34,187,34,0.1)' : 'transparent',
+                                    border: isHackerMode ? '1px solid #22bb22' : '1px solid var(--border-primary)',
+                                    borderRadius: '4px',
+                                    color: isHackerMode ? '#22bb22' : 'var(--text-muted)',
+                                    cursor: 'pointer', fontSize: 10, padding: '2px 6px',
+                                    fontFamily: '"IBM Plex Mono", monospace',
+                                    textTransform: 'uppercase'
                                 }}
                             >
-                                ◉
+                                {isHackerMode ? 'Hack' : 'Prem'}
                             </button>
+                            {isHackerMode && (
+                                <button
+                                    onClick={() => {
+                                        const next = crtColor === 'green' ? 'amber' : 'green';
+                                        setCrtColor(next);
+                                        localStorage.setItem('crt-color', next);
+                                    }}
+                                    title={`Switch to ${crtColor === 'green' ? 'amber' : 'green'} CRT`}
+                                    style={{
+                                        background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12,
+                                        color: crtColor === 'green' ? '#cc8800' : '#22bb22', padding: '0 4px',
+                                    }}
+                                >
+                                    ◉
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -633,13 +865,64 @@ export default function AI() {
                                         </div>
                                     );
                                 }
+                                // Inline music player
+                                if (content.includes('<MUSIC>')) {
+                                    const audioMatch = content.match(/<MUSIC>(.*?)<\/MUSIC>/);
+                                    const caption = content.replace(/<MUSIC>.*?<\/MUSIC>\n?/, '').trim();
+                                    return (
+                                        <div key={i} className="chat-message assistant">
+                                            <div className="chat-bubble terminal-system-msg">
+                                                <div className="terminal-tool-call">
+                                                    <span className="terminal-tool-icon">🎵</span>
+                                                    <span>Music Generated</span>
+                                                </div>
+                                                {audioMatch && (
+                                                    <div style={{ margin: '8px 0' }}>
+                                                        <audio controls src={audioMatch[1]} style={{ width: '100%', height: 32 }} />
+                                                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{caption}</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                // Music generation progress
+                                if (content.includes('<MUSICPROGRESS>')) {
+                                    const promptText = content.replace('\n<MUSICPROGRESS>', '').replace('🎵 Generating: ', '').replace('...', '');
+                                    return (
+                                        <div key={i} className="chat-message assistant">
+                                            <div className="chat-bubble terminal-system-msg">
+                                                <div className="terminal-tool-call">
+                                                    <span className="terminal-tool-icon">🎵</span>
+                                                    <span>Generating: {promptText}...</span>
+                                                </div>
+                                                <div className="gen-progress-bar">
+                                                    <div className="gen-progress-fill" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
                                 return (
-                                    <div key={i} className="chat-message assistant">
-                                        <div className="chat-bubble terminal-system-msg">{content}</div>
+                                    <div key={i} className={`chat-message assistant ${!isHackerMode ? 'premium-chat-message' : ''}`}>
+                                        <div className={`chat-bubble terminal-system-msg ${!isHackerMode ? 'premium-chat-bubble' : ''}`}>{content}</div>
                                     </div>
                                 );
                             }
                             const isStreaming = isLoading && msg.role === 'assistant' && i === messages.length - 1;
+
+                            if (!isHackerMode) {
+                                // Premium Bubble Render
+                                return (
+                                    <div key={i} className={`premium-chat-message ${msg.role}`}>
+                                        <div className="premium-chat-bubble">
+                                            {msg.content || (isStreaming ? '...' : '')}
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            // Hacker CRT Terminal Render
                             return (
                                 <div key={i} className={`chat-message ${msg.role}`}>
                                     <div className="chat-bubble">
@@ -653,103 +936,82 @@ export default function AI() {
                             );
                         })}
                         {isLoading && messages[messages.length - 1]?.content === '' && (
-                            <div className="chat-message assistant">
-                                <div className="chat-bubble" style={{ color: '#1a8a1a' }}>
-                                    Processing<span className="terminal-cursor" />
+                            <div className={`chat-message assistant ${!isHackerMode ? 'premium-chat-message' : ''}`}>
+                                <div className={`chat-bubble ${!isHackerMode ? 'premium-chat-bubble' : ''}`} style={isHackerMode ? { color: '#1a8a1a' } : {}}>
+                                    Processing{isHackerMode && <span className="terminal-cursor" />}
                                 </div>
                             </div>
                         )}
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="terminal-input-container">
-                        <span className="terminal-input-prefix">C:\&gt;&nbsp;</span>
+                    <div className="terminal-input-container" style={!isHackerMode ? { background: 'var(--bg-card)', borderTop: '1px solid var(--border-primary)', padding: '16px' } : {}}>
+                        {isHackerMode && <span className="terminal-input-prefix">C:\&gt;&nbsp;</span>}
                         <input
                             className="chat-input"
+                            style={!isHackerMode ? { background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-md)', padding: '12px 16px', color: 'var(--text-primary)', textShadow: 'none', fontFamily: '"Inter", sans-serif' } : {}}
                             placeholder={'enter command or message...'}
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             disabled={isLoading || isGeneratingImage}
                         />
+                        <button
+                            className={`btn ${isRecording ? 'btn-danger' : 'btn-secondary'}`}
+                            onClick={async () => {
+                                if (isRecording) {
+                                    // Stop recording
+                                    mediaRecorderRef.current?.stop();
+                                    setIsRecording(false);
+                                } else {
+                                    // Start recording
+                                    try {
+                                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                                        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                                        audioChunksRef.current = [];
+                                        recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+                                        recorder.onstop = async () => {
+                                            stream.getTracks().forEach(t => t.stop());
+                                            const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                                            setMessages(prev => [...prev, { role: 'system', content: '🎙️ Transcribing...' }]);
+                                            try {
+                                                const result = await api.transcribe(blob);
+                                                // Remove transcribing message and set input
+                                                setMessages(prev => prev.filter(m => m.content !== '🎙️ Transcribing...'));
+                                                if (result.text) {
+                                                    setInput(result.text.trim());
+                                                }
+                                            } catch {
+                                                setMessages(prev => prev.filter(m => m.content !== '🎙️ Transcribing...'));
+                                                setMessages(prev => [...prev, { role: 'system', content: '[!] Transcription failed' }]);
+                                            }
+                                        };
+                                        recorder.start();
+                                        mediaRecorderRef.current = recorder;
+                                        setIsRecording(true);
+                                    } catch {
+                                        setMessages(prev => [...prev, { role: 'system', content: '[!] Microphone access denied' }]);
+                                    }
+                                }
+                            }}
+                            disabled={isLoading || isGeneratingImage}
+                            title={isRecording ? 'Stop recording' : 'Voice input'}
+                            style={{ minWidth: 40, fontSize: 16 }}
+                        >
+                            {isRecording ? '⏹' : '🎙️'}
+                        </button>
                         <button className="btn btn-primary" onClick={handleSend} disabled={isLoading || isGeneratingImage}>SEND</button>
                         {isLoading && (
                             <button className="btn btn-danger" onClick={handleStop} style={{ minWidth: 60 }}>■ STOP</button>
                         )}
+                        {voiceEnabled && <span style={{ fontSize: 10, color: 'var(--accent-green)', alignSelf: 'center' }}>🔊</span>}
                     </div>
+                    <audio ref={audioRef} style={{ display: 'none' }} />
                 </div>
             </div>
 
-            {/* RIGHT PANEL — AI Engine + Models */}
+            {/* RIGHT PANEL — Models */}
             <aside className="ai-panel-right">
-                {/* AI Engine — moved from left sidebar */}
-                <div className="card compact">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div className="card-title" style={{ marginBottom: 0 }}>AI Engine</div>
-                        <span className={`badge badge-sm ${phoneStatus?.running ? 'badge-green' : 'badge-red'}`}>
-                            {phoneStatus?.running ? <span className="status-dot up" /> : <span className="status-dot down" />}
-                        </span>
-                    </div>
-                    {phoneStatus?.running ? (
-                        <div style={{ fontSize: 12, lineHeight: 2, marginTop: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Model</span>
-                                <span className="mono" style={{ color: 'var(--accent-green)', fontWeight: 600, fontSize: 11 }}>
-                                    {phoneStatus.display_name || phoneStatus.model}
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Params</span>
-                                <span className="mono" style={{ fontSize: 11 }}>{formatParams(phoneStatus.params)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Context</span>
-                                <span className="mono" style={{ fontSize: 11 }}>{formatContext(phoneStatus.context)} tokens</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Engine</span>
-                                <span className="mono" style={{ fontSize: 11 }}>{phoneStatus.engine}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>Quant</span>
-                                <span className="mono" style={{ fontSize: 11, color: 'var(--accent-amber)' }}>
-                                    {phoneStatus.model ? phoneStatus.model.replace('.gguf', '').split('-').pop()?.toUpperCase() || 'N/A' : 'N/A'}
-                                </span>
-                            </div>
-
-                        </div>
-                    ) : (
-                        <div style={{ marginTop: 8 }}>
-                            <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 8 }}>
-                                {switching ? 'Starting AI engine...' : 'llama-server not reachable'}
-                            </div>
-                            {!switching && (
-                                <button
-                                    className="btn btn-sm btn-primary"
-                                    style={{ fontSize: 11, padding: '4px 12px', width: '100%' }}
-                                    onClick={async () => {
-                                        setSwitching(true);
-                                        setStatusMsg('Starting AI engine via USB...');
-                                        try {
-                                            await api.startPhone();
-                                            // Wait for llama-server to boot
-                                            await new Promise(r => setTimeout(r, 8000));
-                                            fetchPhoneStatus();
-                                            setStatusMsg('AI engine started!');
-                                        } catch {
-                                            setStatusMsg('Failed to start');
-                                        } finally {
-                                            setSwitching(false);
-                                            setTimeout(() => setStatusMsg(''), 3000);
-                                        }
-                                    }}
-                                >
-                                    ▶ Start AI Engine
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
 
                 <div className="card compact">
                     <div className="card-title">Installed Models</div>
@@ -776,17 +1038,17 @@ export default function AI() {
                                                     setStatusMsg(`Loading ${displayName}... (est. ${estTime})`);
                                                     try {
                                                         await api.switchPhoneModel(m.name);
-                                                        // Poll health every 3s for up to 90s
+                                                        // Poll phone-status every 3s for up to 90s
                                                         let loaded = false;
                                                         for (let i = 0; i < 30; i++) {
                                                             await new Promise(r => setTimeout(r, 3000));
                                                             setStatusMsg(`Loading ${displayName}... ${(i + 1) * 3}s`);
                                                             try {
-                                                                const s = await api.getAIStatus();
-                                                                if (s.running) {
+                                                                const ps = await api.getPhoneStatus();
+                                                                if (ps.running && ps.model === m.name) {
                                                                     loaded = true;
-                                                                    setAiStatus(s);
-                                                                    setActiveModel(s.model || '');
+                                                                    setPhoneStatus(ps);
+                                                                    setActiveModel(ps.model || '');
                                                                     break;
                                                                 }
                                                             } catch { /* still loading */ }

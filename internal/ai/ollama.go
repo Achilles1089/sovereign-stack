@@ -243,10 +243,28 @@ func formatRWKVPrompt(messages []ChatMessage) string {
 	return sb.String()
 }
 
-// Chat sends a message using /completion with RWKV's native QA format
-// The raw completion endpoint lets the model respond naturally without template mangling
+// isRWKVModel checks if a model ID or filename is an RWKV model.
+// RWKV uses a different prompt format (User:/Assistant:) than transformer models (ChatML).
+func isRWKVModel(modelID string) bool {
+	lower := strings.ToLower(modelID)
+	return strings.Contains(lower, "rwkv")
+}
+
+// Chat routes to the correct endpoint based on model architecture:
+//   - RWKV models → /completion with User:/Assistant: prompt format
+//   - All others  → /v1/chat/completions (llama-server applies proper chat template)
+//
+// All requests stay 100% local — no external APIs.
 func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content string, done bool)) error {
-	// Build prompt using only User/Assistant turns — no system prompt injection
+	if isRWKVModel(model) || isRWKVModel(c.ActiveModel()) {
+		return c.chatCompletion(messages, onChunk)
+	}
+	return c.chatV1(model, messages, onChunk)
+}
+
+// chatCompletion sends messages using /completion with RWKV's native User:/Assistant: format.
+// The raw completion endpoint lets RWKV respond naturally without template mangling.
+func (c *Client) chatCompletion(messages []ChatMessage, onChunk func(content string, done bool)) error {
 	prompt := formatRWKVPrompt(messages)
 
 	reqBody := struct {
@@ -257,7 +275,7 @@ func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content
 		Temperature float64  `json:"temperature"`
 	}{
 		Prompt:      prompt,
-		NPredict:    512,
+		NPredict:    2048,
 		Stream:      true,
 		Stop:        []string{"User:", "\nUser"},
 		Temperature: 1.0,
@@ -325,9 +343,101 @@ func (c *Client) Chat(model string, messages []ChatMessage, onChunk func(content
 	return nil
 }
 
+// chatV1 sends messages via /v1/chat/completions — the local llama-server endpoint
+// that applies proper chat templates (ChatML for Qwen, Llama-3 instruct for Llama, etc.).
+// Uses SSE streaming. 100% local, no external connections.
+func (c *Client) chatV1(model string, messages []ChatMessage, onChunk func(content string, done bool)) error {
+	reqBody := struct {
+		Model       string        `json:"model"`
+		Messages    []ChatMessage `json:"messages"`
+		Stream      bool          `json:"stream"`
+		MaxTokens   int           `json:"max_tokens"`
+		Temperature float64       `json:"temperature"`
+	}{
+		Model:       model,
+		Messages:    messages,
+		Stream:      true,
+		MaxTokens:   2048,
+		Temperature: 0.7,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", c.baseURL()+"/v1/chat/completions", strings.NewReader(string(data)))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Encoding", "identity")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to llama-server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("llama-server returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse SSE stream: "data: {"choices":[{"delta":{"content":"..."}}]}"
+	reader := bufio.NewReaderSize(resp.Body, 512)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("error reading stream: %w", err)
+		}
+
+		lineStr := strings.TrimSpace(string(line))
+		if lineStr == "" {
+			continue
+		}
+
+		lineStr = strings.TrimPrefix(lineStr, "data: ")
+		if lineStr == "[DONE]" {
+			if onChunk != nil {
+				onChunk("", true)
+			}
+			break
+		}
+
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+				FinishReason *string `json:"finish_reason"`
+			} `json:"choices"`
+		}
+
+		if err := json.Unmarshal([]byte(lineStr), &chunk); err != nil {
+			continue
+		}
+
+		if len(chunk.Choices) > 0 {
+			content := chunk.Choices[0].Delta.Content
+			done := chunk.Choices[0].FinishReason != nil
+			if onChunk != nil && (content != "" || done) {
+				onChunk(content, done)
+			}
+			if done {
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 // Generate sends a single prompt and streams the response
 func (c *Client) Generate(model string, prompt string, onChunk func(response string, done bool)) error {
-	// Convert to chat format
 	messages := []ChatMessage{
 		{Role: "user", Content: prompt},
 	}
@@ -401,12 +511,4 @@ func extractPort(host string) string {
 		return parts[len(parts)-1]
 	}
 	return "8085"
-}
-
-func escapeJSONString(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	s = strings.ReplaceAll(s, "\n", `\n`)
-	s = strings.ReplaceAll(s, "\t", `\t`)
-	return s
 }

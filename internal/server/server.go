@@ -71,6 +71,13 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/ai/phone-start", s.handlePhoneStart)
 	mux.HandleFunc("/api/ai/image-generate", s.handleImageGenerate)
 	mux.HandleFunc("/api/ai/image-status", s.handleImageStatus)
+	mux.HandleFunc("/api/ai/transcribe", s.handleTranscribe)
+	mux.HandleFunc("/api/ai/speak", s.handleSpeak)
+	mux.HandleFunc("/api/ai/voice-status", s.handleVoiceStatus)
+	mux.HandleFunc("/api/ai/music-generate", s.handleMusicGenerate)
+	mux.HandleFunc("/api/ai/music-status", s.handleMusicStatus)
+	mux.HandleFunc("/api/resources/live", s.handleResourcesLive)
+	mux.HandleFunc("/api/envy/sysinfo", s.handleEnvySysinfo)
 
 	// Serve static dashboard files (SPA fallback)
 	if s.staticDir != "" {
@@ -88,7 +95,62 @@ func (s *Server) Start() error {
 
 	fmt.Printf("  [WEB] Dashboard: http://%s\n", s.addr)
 	fmt.Printf("  [API] API:       http://%s/api/\n", s.addr)
+
+	// Warm models in background — primes LLM, image gen pipeline, and TTS
+	go s.warmModels()
+
 	return http.ListenAndServe(s.addr, corsMiddleware(mux))
+}
+
+// warmModels sends tiny requests to each inference service to prime their pipelines.
+// Called as a goroutine at startup — does not block server readiness.
+func (s *Server) warmModels() {
+	time.Sleep(5 * time.Second) // give services time to initialize
+	client := &http.Client{Timeout: 120 * time.Second}
+
+	// 1. Warm LLM on phone (prime model in memory)
+	fmt.Println("[warm] Warming LLM on phone...")
+	llmBody := `{"model":"default","messages":[{"role":"user","content":"hi"}],"max_tokens":1,"stream":false}`
+	if resp, err := client.Post("http://127.0.0.1:8085/v1/chat/completions",
+		"application/json", strings.NewReader(llmBody)); err == nil {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		fmt.Println("[warm] LLM warmed ✓")
+	} else {
+		fmt.Printf("[warm] LLM not reachable (will warm on first use): %s\n", err.Error())
+	}
+
+	// 2. Warm image gen on Envy (compile OpenVINO pipeline)
+	imageHost := s.cfg.AI.ImageGenHost
+	if imageHost != "" {
+		fmt.Printf("[warm] Warming image gen at %s...\n", imageHost)
+		imgBody := `{"prompt":"warmup","width":256,"height":256,"steps":1}`
+		if resp, err := client.Post(fmt.Sprintf("http://%s/generate", imageHost),
+			"application/json", strings.NewReader(imgBody)); err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			fmt.Println("[warm] Image gen warmed ✓")
+		} else {
+			fmt.Printf("[warm] Image gen not reachable: %s\n", err.Error())
+		}
+	}
+
+	// 3. Warm TTS (load piper ONNX model)
+	voiceHost := s.cfg.AI.VoiceHost
+	if voiceHost != "" {
+		fmt.Printf("[warm] Warming TTS at %s...\n", voiceHost)
+		ttsBody := `{"text":"ready"}`
+		if resp, err := client.Post(fmt.Sprintf("http://%s/speak", voiceHost),
+			"application/json", strings.NewReader(ttsBody)); err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			fmt.Println("[warm] TTS warmed ✓")
+		} else {
+			fmt.Printf("[warm] TTS not reachable: %s\n", err.Error())
+		}
+	}
+
+	fmt.Println("[warm] Model warming complete")
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
@@ -104,9 +166,115 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func writeJSON(w http.ResponseWriter, data interface{}) {
+// handleResourcesLive returns real-time system stats for Brain Net
+func (s *Server) handleResourcesLive(w http.ResponseWriter, r *http.Request) {
+	result := map[string]interface{}{}
+
+	// RAM from /proc/meminfo
+	if data, err := os.ReadFile("/proc/meminfo"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				switch parts[0] {
+				case "MemTotal:":
+					if v, e := strconv.Atoi(parts[1]); e == nil {
+						result["ram_total_mb"] = v / 1024
+					}
+				case "MemAvailable:":
+					if v, e := strconv.Atoi(parts[1]); e == nil {
+						result["ram_available_mb"] = v / 1024
+					}
+				}
+			}
+		}
+	}
+
+	// Load average from /proc/loadavg
+	if data, err := os.ReadFile("/proc/loadavg"); err == nil {
+		parts := strings.Fields(string(data))
+		if len(parts) >= 3 {
+			if v, e := strconv.ParseFloat(parts[0], 64); e == nil {
+				result["load_1m"] = v
+			}
+			if v, e := strconv.ParseFloat(parts[1], 64); e == nil {
+				result["load_5m"] = v
+			}
+			if v, e := strconv.ParseFloat(parts[2], 64); e == nil {
+				result["load_15m"] = v
+			}
+		}
+	}
+
+	// Uptime from /proc/uptime
+	if data, err := os.ReadFile("/proc/uptime"); err == nil {
+		parts := strings.Fields(string(data))
+		if len(parts) >= 1 {
+			if v, e := strconv.ParseFloat(parts[0], 64); e == nil {
+				result["uptime_secs"] = int(v)
+			}
+		}
+	}
+
+	// CPU temp from /sys/class/thermal
+	if data, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp"); err == nil {
+		if v, e := strconv.Atoi(strings.TrimSpace(string(data))); e == nil {
+			result["temp_c"] = v / 1000
+		}
+	}
+
+	// Disk usage for /
+	out, err := exec.Command("df", "-B1", "/").Output()
+	if err == nil {
+		lines := strings.Split(string(out), "\n")
+		if len(lines) >= 2 {
+			parts := strings.Fields(lines[1])
+			if len(parts) >= 4 {
+				if v, e := strconv.ParseInt(parts[1], 10, 64); e == nil {
+					result["disk_total_gb"] = int(v / (1024 * 1024 * 1024))
+				}
+				if v, e := strconv.ParseInt(parts[3], 10, 64); e == nil {
+					result["disk_free_gb"] = int(v / (1024 * 1024 * 1024))
+				}
+			}
+		}
+	}
+
+	writeJSON(w, result)
+}
+
+// handleEnvySysinfo proxies the Envy's sysinfo server
+func (s *Server) handleEnvySysinfo(w http.ResponseWriter, r *http.Request) {
+	// Envy sysinfo server runs on port 8092 at the same host as image gen
+	imageHost := s.cfg.AI.ImageGenHost
+	if imageHost == "" {
+		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+	// Extract just the IP from imageHost (strip port)
+	host := strings.Split(imageHost, ":")[0]
+	sysinfoURL := fmt.Sprintf("http://%s:8092", host)
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(sysinfoURL)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+	defer resp.Body.Close()
+
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+	data["online"] = true
+	writeJSON(w, data)
+}
+
+func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(v)
 }
 
 // --- Handlers ---
@@ -561,8 +729,8 @@ func (s *Server) handleImageStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePhoneStatus(w http.ResponseWriter, r *http.Request) {
-	// Query llama-server's /v1/models endpoint to get loaded model info
-	resp, err := http.Get("http://" + s.client.Host + "/v1/models")
+	// Query llama-server via ADB port forward (127.0.0.1:8085 → phone:8085)
+	resp, err := http.Get("http://127.0.0.1:8085/v1/models")
 	if err != nil {
 		writeJSON(w, map[string]interface{}{
 			"running":      false,
@@ -621,8 +789,8 @@ func (s *Server) handlePhoneStatus(w http.ResponseWriter, r *http.Request) {
 		"engine":       "llama-server",
 	}
 
-	// Try to get phone hardware from sysinfo companion (same host, port 8086)
-	phoneHW := fetchPhoneHardware(s.client.Host)
+	// Try to get phone hardware from sysinfo companion via ADB forward (127.0.0.1:8086)
+	phoneHW := fetchPhoneHardware("127.0.0.1:8085")
 	if phoneHW != nil {
 		response["phone_model"] = phoneHW.PhoneModel
 		response["soc"] = phoneHW.SoC
@@ -652,14 +820,11 @@ type phoneHardwareInfo struct {
 }
 
 // fetchPhoneHardware queries the sysinfo companion endpoint on port 8086
+// The companion runs on the phone but is accessed via ADB port forwarding
+// through localhost:8086
 func fetchPhoneHardware(llamaHost string) *phoneHardwareInfo {
-	// Extract host IP from llama-server address (e.g., "192.168.1.100:8085" -> "192.168.1.100")
-	host := llamaHost
-	if idx := strings.LastIndex(host, ":"); idx >= 0 {
-		host = host[:idx]
-	}
-
-	sysinfoURL := fmt.Sprintf("http://%s:8086", host)
+	// ADB forward maps localhost:8086 → phone:8086
+	sysinfoURL := "http://127.0.0.1:8086"
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(sysinfoURL)
@@ -677,13 +842,9 @@ func fetchPhoneHardware(llamaHost string) *phoneHardwareInfo {
 
 // handlePhoneModels lists available GGUF models on the phone
 func (s *Server) handlePhoneModels(w http.ResponseWriter, r *http.Request) {
-	host := s.client.Host
-	if idx := strings.LastIndex(host, ":"); idx >= 0 {
-		host = host[:idx]
-	}
-
+	// ADB forward maps localhost:8086 → phone:8086
 	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://%s:8086/models", host))
+	resp, err := client.Get("http://127.0.0.1:8086/models")
 	if err != nil {
 		writeJSON(w, map[string]interface{}{"error": "sysinfo companion not reachable"})
 		return
@@ -710,15 +871,10 @@ func (s *Server) handlePhoneSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host := s.client.Host
-	if idx := strings.LastIndex(host, ":"); idx >= 0 {
-		host = host[:idx]
-	}
-
-	// Forward the request body to sysinfo companion
+	// ADB forward maps localhost:8086 → phone:8086
 	body, _ := io.ReadAll(r.Body)
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("POST", fmt.Sprintf("http://%s:8086/switch", host), strings.NewReader(string(body)))
+	req, err := http.NewRequest("POST", "http://127.0.0.1:8086/switch", strings.NewReader(string(body)))
 	if err != nil {
 		writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
 		return
@@ -784,6 +940,7 @@ func (s *Server) handlePhoneStart(w http.ResponseWriter, r *http.Request) {
 	exec.Command("adb", "shell", "run-as", "com.termux", "sh", "-c", sysinfoCmd).Run()
 
 	// Step 4: Start llama-server with optimized flags for T616 (2x A75 big + 6x A55 little)
+	// Pinned to big cores 6,7 via taskset. KV cache quantized to q8_0 for 50% memory savings.
 	llamaCmd := fmt.Sprintf(
 		`export PATH=/data/data/com.termux/files/usr/bin:$PATH; `+
 			`export LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib; `+
@@ -792,9 +949,11 @@ func (s *Server) handlePhoneStart(w http.ResponseWriter, r *http.Request) {
 			`nohup taskset -c 6,7 $HOME/llama.cpp/bld/bin/llama-server `+
 			`-m $HOME/models/%s `+
 			`--host 0.0.0.0 --port 8085 `+
-			`--threads 2 --parallel 1 --ctx-size 2048 `+
-			`--batch-size 256 --ubatch-size 128 `+
+			`--threads 2 --parallel 1 --ctx-size 4096 `+
+			`--batch-size 512 --ubatch-size 256 `+
 			`--flash-attn on `+
+			`--cache-type-k q8_0 --cache-type-v q8_0 `+
+			`--prio 2 `+
 			`> /dev/null 2>&1 &`,
 		req.Model,
 	)
@@ -856,4 +1015,168 @@ func spaHandler(staticDir string) http.Handler {
 		}
 		fs.ServeHTTP(w, r)
 	})
+}
+
+// --- Voice Pipeline Handlers ---
+
+// handleTranscribe proxies audio to the local voice_server for STT
+func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	voiceHost := s.cfg.AI.VoiceHost
+	if voiceHost == "" {
+		writeJSON(w, map[string]interface{}{"error": "voice_host not configured"})
+		return
+	}
+
+	// Forward the raw audio body to voice_server /transcribe
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to read audio"})
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	proxyReq, err := http.NewRequest("POST", fmt.Sprintf("http://%s/transcribe", voiceHost), bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("voice server unreachable: %s", err.Error())})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
+// handleSpeak proxies text to the local voice_server for TTS
+func (s *Server) handleSpeak(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	voiceHost := s.cfg.AI.VoiceHost
+	if voiceHost == "" {
+		writeJSON(w, map[string]interface{}{"error": "voice_host not configured"})
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to read request"})
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	proxyReq, err := http.NewRequest("POST", fmt.Sprintf("http://%s/speak", voiceHost), bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("voice server unreachable: %s", err.Error())})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
+// handleVoiceStatus checks if the voice pipeline is online
+func (s *Server) handleVoiceStatus(w http.ResponseWriter, r *http.Request) {
+	voiceHost := s.cfg.AI.VoiceHost
+	if voiceHost == "" {
+		writeJSON(w, map[string]interface{}{"stt_online": false, "tts_online": false})
+		return
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://%s/status", voiceHost))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"stt_online": false, "tts_online": false})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
+// --- Music Gen Handlers ---
+
+// handleMusicGenerate proxies to the Envy music_server for spectrogram→audio
+func (s *Server) handleMusicGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	musicHost := s.cfg.AI.MusicGenHost
+	if musicHost == "" {
+		writeJSON(w, map[string]interface{}{"error": "music_gen_host not configured"})
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to read request"})
+		return
+	}
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	proxyReq, err := http.NewRequest("POST", fmt.Sprintf("http://%s/generate", musicHost), bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("music server unreachable: %s", err.Error())})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
+// handleMusicStatus checks if the music gen server is online
+func (s *Server) handleMusicStatus(w http.ResponseWriter, r *http.Request) {
+	musicHost := s.cfg.AI.MusicGenHost
+	if musicHost == "" {
+		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://%s/status", musicHost))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
 }

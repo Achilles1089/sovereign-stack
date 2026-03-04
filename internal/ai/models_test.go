@@ -77,3 +77,24 @@ func TestGetModelByName(t *testing.T) {
 		t.Error("should not find nonexistent model")
 	}
 }
+
+func TestIsRWKVModel(t *testing.T) {
+	tests := []struct {
+		name   string
+		expect bool
+	}{
+		{"rwkv7-2.9B-world-q4_k_m.gguf", true},
+		{"rwkv7-0.4B", true},
+		{"RWKV-7 2.9B", true},
+		{"qwen2.5-3b-instruct-q4_k_m.gguf", false},
+		{"Llama-3.2-3B-Instruct-Q4_K_M.gguf", false},
+		{"Phi-3-mini-4k-instruct-q4.gguf", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		got := isRWKVModel(tt.name)
+		if got != tt.expect {
+			t.Errorf("isRWKVModel(%q) = %v, want %v", tt.name, got, tt.expect)
+		}
+	}
+}

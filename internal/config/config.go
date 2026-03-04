@@ -46,7 +46,9 @@ type AIConfig struct {
 	Host         string `yaml:"host"`           // "localhost:8085" — llama-server address
 	PhoneHost    string `yaml:"phone_host"`     // "localhost:8085" via ADB forward
 	ModelsDir    string `yaml:"models_dir"`     // local GGUF models directory
-	ImageGenHost string `yaml:"image_gen_host"` // "10.0.0.2:8090" — Envy media node (image + music gen)
+	ImageGenHost string `yaml:"image_gen_host"` // "10.0.0.2:8090" — Envy media node
+	VoiceHost    string `yaml:"voice_host"`     // "localhost:8088" — Brain Net voice server (Whisper+Piper)
+	MusicGenHost string `yaml:"music_gen_host"` // "10.0.0.2:8091" — Envy music gen server
 }
 
 // BackupConfig holds backup settings
@@ -85,6 +87,8 @@ func DefaultConfig() *Config {
 			Enabled:      true,
 			Host:         "10.0.0.2:8087",
 			ImageGenHost: "localhost:8090",
+			VoiceHost:    "localhost:8088",
+			MusicGenHost: "10.0.0.2:8091",
 		},
 		Backup: BackupConfig{
 			Enabled:  true,

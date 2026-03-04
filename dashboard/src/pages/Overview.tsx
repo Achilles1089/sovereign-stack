@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { api, type ServiceStatus, type SystemResources } from '../api/client';
+import { api, type ServiceStatus, type SystemResources, type PhoneStatus } from '../api/client';
 
 export default function Overview() {
     const [services, setServices] = useState<ServiceStatus[]>([]);
     const [resources, setResources] = useState<SystemResources | null>(null);
+    const [phoneStatus, setPhoneStatus] = useState<PhoneStatus | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -14,11 +15,15 @@ export default function Overview() {
         api.getStatus()
             .then(d => setServices(d.services || []))
             .catch(() => { });
+        api.getPhoneStatus()
+            .then(d => setPhoneStatus(d))
+            .catch(() => setPhoneStatus(null));
 
         // Refresh every 15s (gentler on Celeron)
         const interval = setInterval(() => {
             api.getResources().then(d => setResources(d)).catch(() => { });
             api.getStatus().then(d => setServices(d.services || [])).catch(() => { });
+            api.getPhoneStatus().then(d => setPhoneStatus(d)).catch(() => setPhoneStatus(null));
         }, 15000);
         return () => clearInterval(interval);
     }, []);
@@ -58,32 +63,77 @@ export default function Overview() {
                         </div>
                     </div>
 
-                    <div className="grid-2" style={{ marginBottom: 24 }}>
-                        <div className="card">
-                            <div className="card-title">System Resources</div>
-                            <div style={{ marginBottom: 16 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                    <span>CPU</span>
-                                    <span className="mono" style={{ fontSize: 11 }}>{resources?.cpu_model || 'Unknown'}</span>
+                    <div className="grid-2" style={{ marginBottom: 24, alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                            {/* Node 2: Brain Net */}
+                            <div className="card">
+                                <div className="card-title">Brain Net Core (Host)</div>
+                                <div style={{ marginBottom: 16 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                        <span>CPU</span>
+                                        <span className="mono" style={{ fontSize: 11 }}>{resources?.cpu_model || 'Unknown'}</span>
+                                    </div>
+                                </div>
+                                <div style={{ marginBottom: 16 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                        <span>RAM</span>
+                                        <span className="mono">{ramTotalGB} GB</span>
+                                    </div>
+                                    <div className="progress-bar">
+                                        <div className="progress-fill ram" style={{ width: '10%' }} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                        <span>Disk</span>
+                                        <span className="mono">{diskUsedGB} / {resources?.disk_total_gb || 0} GB</span>
+                                    </div>
+                                    <div className="progress-bar">
+                                        <div className="progress-fill disk" style={{ width: `${diskPercent}%` }} />
+                                    </div>
                                 </div>
                             </div>
-                            <div style={{ marginBottom: 16 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                    <span>RAM</span>
-                                    <span className="mono">{ramTotalGB} GB</span>
+
+                            {/* Node 3: Edge Accelerator */}
+                            <div className="card">
+                                <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Edge Accelerator (iOS)</span>
+                                    <span className={`status-dot ${phoneStatus ? 'up' : 'down'}`} title={phoneStatus ? 'Connected via USB' : 'Disconnected'} />
                                 </div>
-                                <div className="progress-bar">
-                                    <div className="progress-fill ram" style={{ width: '10%' }} />
-                                </div>
-                            </div>
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                    <span>Disk</span>
-                                    <span className="mono">{diskUsedGB} / {resources?.disk_total_gb || 0} GB</span>
-                                </div>
-                                <div className="progress-bar">
-                                    <div className="progress-fill disk" style={{ width: `${diskPercent}%` }} />
-                                </div>
+                                {phoneStatus ? (
+                                    <>
+                                        <div style={{ marginBottom: 12 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                                <span>Device</span>
+                                                <span className="mono" style={{ color: 'var(--accent-cyan)' }}>{phoneStatus.phone_model}</span>
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: 12 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                                <span>SoC</span>
+                                                <span className="mono">{phoneStatus.soc || 'Unknown'}</span>
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: 12 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                                <span>Battery</span>
+                                                <span className="mono" style={{ color: phoneStatus.battery_pct && phoneStatus.battery_pct > 20 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                                                    {phoneStatus.battery_pct}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                                <span>Loaded Model</span>
+                                                <span className="mono">{phoneStatus.model ? phoneStatus.display_name || phoneStatus.model : 'None'}</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                                        No iPhone detected on USB interface. Connect the device and launch SovereignAI to establish the link.
+                                    </div>
+                                )}
                             </div>
                         </div>
 

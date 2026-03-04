@@ -99,6 +99,33 @@ export interface ImageGenStatus {
     model: string;
 }
 
+export interface BrainNetLive {
+    ram_total_mb: number;
+    ram_available_mb: number;
+    load_1m: number;
+    load_5m: number;
+    load_15m: number;
+    uptime_secs: number;
+    temp_c: number;
+    disk_total_gb: number;
+    disk_free_gb: number;
+}
+
+export interface EnvySysinfo {
+    online: boolean;
+    cpu_model?: string;
+    cpu_cores?: number;
+    load_1m?: number;
+    load_5m?: number;
+    load_15m?: number;
+    ram_total_mb?: number;
+    ram_available_mb?: number;
+    disk_total_gb?: number;
+    disk_free_gb?: number;
+    temp_c?: number;
+    uptime_secs?: number;
+}
+
 async function fetchJSON<T>(path: string): Promise<T> {
     const res = await fetch(API_BASE + path);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -115,6 +142,8 @@ export const api = {
     getPhoneStatus: () => fetchJSON<PhoneStatus>('/ai/phone-status'),
     getPhoneModels: () => fetchJSON<{ models: PhoneModel[]; active: string | null }>('/ai/phone-models'),
     getImageStatus: () => fetchJSON<ImageGenStatus>('/ai/image-status'),
+    getBrainNetLive: () => fetchJSON<BrainNetLive>('/resources/live'),
+    getEnvySysinfo: () => fetchJSON<EnvySysinfo>('/envy/sysinfo'),
     switchPhoneModel: (model: string) => fetch(API_BASE + '/ai/phone-switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -209,4 +238,40 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model }),
     }).then(r => r.json()),
+
+    // Voice pipeline (Brain Net local — Whisper STT + Piper TTS)
+    getVoiceStatus: () => fetchJSON<{ stt_online: boolean; tts_online: boolean }>('/ai/voice-status'),
+
+    transcribe: async (audioBlob: Blob): Promise<{ text: string; time_ms: number }> => {
+        const res = await fetch(API_BASE + '/ai/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': audioBlob.type || 'audio/wav' },
+            body: audioBlob,
+        });
+        if (!res.ok) throw new Error(`Transcribe error: ${res.status}`);
+        return res.json();
+    },
+
+    speak: async (text: string): Promise<{ audio: string; time_ms: number }> => {
+        const res = await fetch(API_BASE + '/ai/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        if (!res.ok) throw new Error(`Speak error: ${res.status}`);
+        return res.json();
+    },
+
+    // Music generation (Envy local — spectrogram → audio)
+    getMusicStatus: () => fetchJSON<{ online: boolean; engine: string }>('/ai/music-status'),
+
+    generateMusic: async (prompt: string): Promise<{ audio: string; prompt: string; total_time_ms: number; duration_s: number }> => {
+        const res = await fetch(API_BASE + '/ai/music-generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+        });
+        if (!res.ok) throw new Error(`Music gen error: ${res.status}`);
+        return res.json();
+    },
 };
