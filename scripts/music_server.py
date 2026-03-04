@@ -245,19 +245,36 @@ class MusicHandler(BaseHTTPRequestHandler):
 
         start_time = time.time()
 
-        cmd = [self.sd_bin, "-p", music_prompt, "-o", output_img,
-               "--steps", "4", "-W", "256", "-H", "128"]
-        if self.model_path:
-            cmd.extend(["-m", self.model_path])
-
+        # Use the running sd_server_openvino HTTP API instead of sd binary
+        import urllib.request
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            gen_time = time.time() - start_time
+            req_data = json.dumps({
+                "prompt": music_prompt,
+                "width": 256,
+                "height": 128,
+                "steps": 1,
+            }).encode("utf-8")
+            http_req = urllib.request.Request(
+                "http://localhost:8090/generate",
+                data=req_data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(http_req, timeout=120) as resp:
+                resp_data = json.loads(resp.read())
 
-            if result.returncode != 0 or not os.path.exists(output_img):
-                self._cleanup(output_img)
-                self._send_json({"error": f"sd failed: {result.stderr[:300]}"}, 500)
+            if "error" in resp_data:
+                self._send_json({"error": f"sd_server: {resp_data['error']}"}, 500)
                 return
+
+            # Decode base64 PNG from sd_server response
+            img_b64 = resp_data.get("image", "")
+            if img_b64.startswith("data:"):
+                img_b64 = img_b64.split(",", 1)[1]
+            img_bytes = base64.b64decode(img_b64)
+            with open(output_img, "wb") as f:
+                f.write(img_bytes)
+
+            gen_time = time.time() - start_time
 
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_tmp:
                 wav_path = wav_tmp.name
