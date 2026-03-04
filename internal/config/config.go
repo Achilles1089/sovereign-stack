@@ -49,6 +49,7 @@ type AIConfig struct {
 	ImageGenHost string `yaml:"image_gen_host"` // "10.0.0.2:8090" — Envy media node
 	VoiceHost    string `yaml:"voice_host"`     // "localhost:8088" — Brain Net voice server (Whisper+Piper)
 	MusicGenHost string `yaml:"music_gen_host"` // "10.0.0.2:8091" — Envy music gen server
+	RAGHost      string `yaml:"rag_host"`       // "localhost:8093" — Brain Net RAG server
 }
 
 // BackupConfig holds backup settings
@@ -89,6 +90,7 @@ func DefaultConfig() *Config {
 			ImageGenHost: "localhost:8090",
 			VoiceHost:    "localhost:8088",
 			MusicGenHost: "10.0.0.2:8091",
+			RAGHost:      "localhost:8093",
 		},
 		Backup: BackupConfig{
 			Enabled:  true,

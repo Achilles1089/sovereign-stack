@@ -77,6 +77,11 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/ai/voice-status", s.handleVoiceStatus)
 	mux.HandleFunc("/api/ai/music-generate", s.handleMusicGenerate)
 	mux.HandleFunc("/api/ai/music-status", s.handleMusicStatus)
+	mux.HandleFunc("/api/ai/rag-upload", s.handleRAGProxy)
+	mux.HandleFunc("/api/ai/rag-search", s.handleRAGProxy)
+	mux.HandleFunc("/api/ai/rag-documents", s.handleRAGProxy)
+	mux.HandleFunc("/api/ai/rag-delete", s.handleRAGProxy)
+	mux.HandleFunc("/api/ai/rag-status", s.handleRAGProxy)
 	mux.HandleFunc("/api/resources/live", s.handleResourcesLive)
 	mux.HandleFunc("/api/envy/sysinfo", s.handleEnvySysinfo)
 
@@ -1289,6 +1294,76 @@ func (s *Server) handleMusicStatus(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Get(fmt.Sprintf("http://%s/status", musicHost))
 	if err != nil {
 		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
+}
+
+// handleRAGProxy generically proxies /api/ai/rag-{action} to the local rag_server.
+// Maps: rag-upload→/upload, rag-search→/search, rag-documents→/documents, rag-delete→/document, rag-status→/status
+func (s *Server) handleRAGProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(200)
+		return
+	}
+
+	ragHost := s.cfg.AI.RAGHost
+	if ragHost == "" {
+		ragHost = "localhost:8093"
+	}
+
+	// Map route to rag_server path
+	var targetPath string
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/rag-upload"):
+		targetPath = "/upload"
+	case strings.HasSuffix(r.URL.Path, "/rag-search"):
+		targetPath = "/search"
+	case strings.HasSuffix(r.URL.Path, "/rag-documents"):
+		targetPath = "/documents"
+	case strings.HasSuffix(r.URL.Path, "/rag-delete"):
+		targetPath = "/document"
+	case strings.HasSuffix(r.URL.Path, "/rag-status"):
+		targetPath = "/status"
+	default:
+		http.Error(w, "unknown RAG endpoint", 404)
+		return
+	}
+
+	// Build target URL preserving query string
+	targetURL := fmt.Sprintf("http://%s%s", ragHost, targetPath)
+	if r.URL.RawQuery != "" {
+		targetURL += "?" + r.URL.RawQuery
+	}
+
+	// Read and forward body
+	body, _ := io.ReadAll(r.Body)
+	client := &http.Client{Timeout: 120 * time.Second} // uploads + embeddings can be slow
+
+	var method string
+	if strings.HasSuffix(r.URL.Path, "/rag-delete") {
+		method = "DELETE"
+	} else {
+		method = r.Method
+	}
+
+	proxyReq, err := http.NewRequest(method, targetURL, bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("RAG server unreachable: %s", err.Error())})
 		return
 	}
 	defer resp.Body.Close()

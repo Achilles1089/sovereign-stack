@@ -285,4 +285,32 @@ export const api = {
         if (!res.ok) throw new Error(`Voice chat error: ${res.status}`);
         return res.json();
     },
+
+    // RAG Document Chat — upload docs, search, manage
+    getRAGStatus: () => fetchJSON<{ online: boolean; model_loaded: boolean; documents: number; model: string }>('/ai/rag-status'),
+
+    uploadDocument: async (file: File): Promise<{ doc_id: string; name: string; chunks: number; embed_time_ms: number }> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(API_BASE + '/ai/rag-upload', {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) throw new Error(`Upload error: ${res.status}`);
+        return res.json();
+    },
+
+    searchDocuments: async (query: string, k: number = 5): Promise<{ results: Array<{ document: string; chunk: string; score: number }>; query: string }> => {
+        const res = await fetch(API_BASE + `/ai/rag-search?q=${encodeURIComponent(query)}&k=${k}`);
+        if (!res.ok) throw new Error(`Search error: ${res.status}`);
+        return res.json();
+    },
+
+    listDocuments: () => fetchJSON<{ documents: Array<{ doc_id: string; name: string; num_chunks: number; added_at: string }> }>('/ai/rag-documents'),
+
+    deleteDocument: async (name: string): Promise<{ deleted: string }> => {
+        const res = await fetch(API_BASE + `/ai/rag-delete?name=${encodeURIComponent(name)}`, { method: 'POST' });
+        if (!res.ok) throw new Error(`Delete error: ${res.status}`);
+        return res.json();
+    },
 };

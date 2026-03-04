@@ -14,6 +14,7 @@ const TERMINAL_COMMANDS = [
     { cmd: '/imagine', desc: 'Generate image (e.g. /imagine sunset)' },
     { cmd: '/voice', desc: 'Toggle voice mode (auto-speak responses)' },
     { cmd: '/music', desc: 'Generate music (e.g. /music ambient piano)' },
+    { cmd: '/doc', desc: 'Document chat (upload/list/search/ask/delete)' },
     { cmd: '/clear', desc: 'Clear terminal' },
     { cmd: '/help', desc: 'Show available commands' },
 ];
@@ -82,6 +83,7 @@ export default function AI() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [musicNodeOnline, setMusicNodeOnline] = useState(false);
 
     // CRT color CSS variable
@@ -356,6 +358,124 @@ export default function AI() {
                     return updated;
                 });
             }).finally(() => setIsGeneratingImage(false));
+            return true;
+        }
+        if (command === '/doc') {
+            const sub = (parts[1] || '').toLowerCase();
+            if (sub === 'upload') {
+                fileInputRef.current?.click();
+                return true;
+            }
+            if (sub === 'list') {
+                setMessages(prev => [...prev, { role: 'system', content: '📄 Loading documents...' }]);
+                api.listDocuments().then(res => {
+                    setMessages(prev => prev.filter(m => m.content !== '📄 Loading documents...'));
+                    if (res.documents.length === 0) {
+                        setMessages(prev => [...prev, { role: 'system', content: 'No documents uploaded. Use /doc upload to add files.' }]);
+                    } else {
+                        const list = res.documents.map(d => `  ${d.name} — ${d.num_chunks} chunks (${d.added_at})`).join('\n');
+                        setMessages(prev => [...prev, { role: 'system', content: `Documents:\n${list}` }]);
+                    }
+                }).catch(() => {
+                    setMessages(prev => prev.filter(m => m.content !== '📄 Loading documents...'));
+                    setMessages(prev => [...prev, { role: 'system', content: '[!] Failed to list documents. RAG server may be offline.' }]);
+                });
+                return true;
+            }
+            if (sub === 'search') {
+                const query = parts.slice(2).join(' ');
+                if (!query) {
+                    setMessages(prev => [...prev, { role: 'system', content: 'Usage: /doc search <query>' }]);
+                    return true;
+                }
+                setMessages(prev => [...prev, { role: 'system', content: `🔍 Searching: ${query}...` }]);
+                api.searchDocuments(query).then(res => {
+                    setMessages(prev => prev.filter(m => m.content.startsWith('🔍 Searching:')));
+                    if (res.results.length === 0) {
+                        setMessages(prev => [...prev, { role: 'system', content: 'No results found.' }]);
+                    } else {
+                        const results = res.results.map((r, i) => `${i + 1}. [${r.document}] (${(r.score * 100).toFixed(0)}%)\n   ${r.chunk.slice(0, 200)}...`).join('\n\n');
+                        setMessages(prev => [...prev, { role: 'system', content: `Results:\n${results}` }]);
+                    }
+                }).catch(() => {
+                    setMessages(prev => [...prev, { role: 'system', content: '[!] Search failed.' }]);
+                });
+                return true;
+            }
+            if (sub === 'delete') {
+                const name = parts.slice(2).join(' ');
+                if (!name) {
+                    setMessages(prev => [...prev, { role: 'system', content: 'Usage: /doc delete <filename>' }]);
+                    return true;
+                }
+                api.deleteDocument(name).then(() => {
+                    setMessages(prev => [...prev, { role: 'system', content: `Deleted: ${name}` }]);
+                }).catch(() => {
+                    setMessages(prev => [...prev, { role: 'system', content: `[!] Failed to delete: ${name}` }]);
+                });
+                return true;
+            }
+            if (sub === 'ask') {
+                const query = parts.slice(2).join(' ');
+                if (!query) {
+                    setMessages(prev => [...prev, { role: 'system', content: 'Usage: /doc ask <question>\nSearches your documents and asks the LLM with context.' }]);
+                    return true;
+                }
+                // RAG-augmented query: search docs → inject context → send to LLM
+                setMessages(prev => [...prev, { role: 'user', content: query }, { role: 'system', content: '📄 Searching documents...' }]);
+                setIsLoading(true);
+                api.searchDocuments(query, 3).then(async (res) => {
+                    setMessages(prev => prev.filter(m => m.content !== '📄 Searching documents...'));
+                    const context = res.results.map(r => r.chunk).join('\n\n---\n\n');
+                    const ragPrompt = context
+                        ? `Based on the following document excerpts, answer the question.\n\nDocument excerpts:\n${context}\n\nQuestion: ${query}`
+                        : query;
+                    // Send to LLM via streaming chat
+                    setInput('');
+                    const newMsg: Message = { role: 'assistant', content: '' };
+                    setMessages(prev => [...prev, newMsg]);
+                    try {
+                        const response = await fetch('/api/ai/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ message: ragPrompt, context_size: contextSize }),
+                        });
+                        const reader = response.body?.getReader();
+                        const decoder = new TextDecoder();
+                        let fullText = '';
+                        if (reader) {
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                const chunk = decoder.decode(value, { stream: true });
+                                for (const line of chunk.split('\n')) {
+                                    if (!line.startsWith('data: ')) continue;
+                                    const data = line.slice(6);
+                                    if (data === '[DONE]') break;
+                                    try {
+                                        const parsed = JSON.parse(data);
+                                        const content = parsed.choices?.[0]?.delta?.content || '';
+                                        fullText += content;
+                                        setMessages(prev => {
+                                            const updated = [...prev];
+                                            updated[updated.length - 1] = { role: 'assistant', content: fullText };
+                                            return updated;
+                                        });
+                                    } catch { /* skip */ }
+                                }
+                            }
+                        }
+                    } catch {
+                        setMessages(prev => [...prev, { role: 'system', content: '[!] LLM query failed.' }]);
+                    }
+                }).catch(() => {
+                    setMessages(prev => prev.filter(m => m.content !== '📄 Searching documents...'));
+                    setMessages(prev => [...prev, { role: 'system', content: '[!] Document search failed.' }]);
+                }).finally(() => setIsLoading(false));
+                return true;
+            }
+            // Default /doc help
+            setMessages(prev => [...prev, { role: 'system', content: 'Document commands:\n  /doc upload    Upload a PDF or text file\n  /doc list      List uploaded documents\n  /doc search    Search documents (e.g. /doc search quantum physics)\n  /doc ask       Ask a question using document context\n  /doc delete    Remove a document (e.g. /doc delete notes.pdf)' }]);
             return true;
         }
         return false;
@@ -1023,6 +1143,29 @@ export default function AI() {
                         {voiceEnabled && <span style={{ fontSize: 10, color: 'var(--accent-green)', alignSelf: 'center' }}>🔊</span>}
                     </div>
                     <audio ref={audioRef} style={{ display: 'none' }} />
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.txt,.md,.json,.csv"
+                        style={{ display: 'none' }}
+                        onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setMessages(prev => [...prev, { role: 'system', content: `📄 Uploading ${file.name}...` }]);
+                            try {
+                                const result = await api.uploadDocument(file);
+                                setMessages(prev => prev.filter(m => !m.content.startsWith('📄 Uploading')));
+                                setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: `✅ ${result.name} uploaded\n   ${result.chunks} chunks embedded in ${(result.embed_time_ms / 1000).toFixed(1)}s`
+                                }]);
+                            } catch {
+                                setMessages(prev => prev.filter(m => !m.content.startsWith('📄 Uploading')));
+                                setMessages(prev => [...prev, { role: 'system', content: '[!] Upload failed. RAG server may be offline.' }]);
+                            }
+                            e.target.value = '';
+                        }}
+                    />
                 </div>
             </div>
 
