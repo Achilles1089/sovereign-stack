@@ -43,7 +43,7 @@ type ServicesConfig struct {
 type AIConfig struct {
 	Enabled      bool   `yaml:"enabled"`
 	DefaultModel string `yaml:"default_model"`  // e.g., "rwkv7-2.9B"
-	Host         string `yaml:"host"`           // "localhost:8085" — llama-server address
+	Host         string `yaml:"ollama_host"`    // "localhost:8085" — phone llama-server via ADB forward
 	PhoneHost    string `yaml:"phone_host"`     // "localhost:8085" via ADB forward
 	ModelsDir    string `yaml:"models_dir"`     // local GGUF models directory
 	ImageGenHost string `yaml:"image_gen_host"` // "10.0.0.2:8090" — Envy media node
@@ -85,7 +85,7 @@ func DefaultConfig() *Config {
 		},
 		AI: AIConfig{
 			Enabled:      true,
-			Host:         "10.0.0.2:8087",
+			Host:         "localhost:8085",
 			ImageGenHost: "localhost:8090",
 			VoiceHost:    "localhost:8088",
 			MusicGenHost: "10.0.0.2:8091",
