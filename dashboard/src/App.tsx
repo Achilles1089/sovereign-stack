@@ -3,6 +3,7 @@ import { Component, type ReactNode } from 'react';
 import './index.css';
 import Apps from './pages/Apps';
 import AI from './pages/AI';
+import News from './pages/News';
 import Backups from './pages/Backups';
 import Settings from './pages/Settings';
 
@@ -28,6 +29,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 
 const TABS = [
   { path: '/', label: 'AI', icon: '🧠' },
+  { path: '/news', label: 'News', icon: '📰' },
   { path: '/apps', label: 'Apps', icon: '📦' },
   { path: '/backups', label: 'Backups', icon: '💾' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },
@@ -61,6 +63,7 @@ function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<AI />} />
+              <Route path="/news" element={<News />} />
               <Route path="/apps" element={<Apps />} />
               <Route path="/backups" element={<Backups />} />
               <Route path="/settings" element={<Settings />} />

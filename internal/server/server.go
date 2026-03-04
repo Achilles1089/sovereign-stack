@@ -87,6 +87,11 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/gallery", s.handleGalleryList)
 	mux.HandleFunc("/api/gallery/image/", s.handleGalleryImage)
 	mux.HandleFunc("/api/gallery/delete/", s.handleGalleryDelete)
+	mux.HandleFunc("/api/news/feeds", s.handleNewsProxy)
+	mux.HandleFunc("/api/news/articles", s.handleNewsProxy)
+	mux.HandleFunc("/api/news/search", s.handleNewsProxy)
+	mux.HandleFunc("/api/news/refresh", s.handleNewsProxy)
+	mux.HandleFunc("/api/news/status", s.handleNewsProxy)
 	mux.HandleFunc("/api/resources/live", s.handleResourcesLive)
 	mux.HandleFunc("/api/envy/sysinfo", s.handleEnvySysinfo)
 
@@ -1512,4 +1517,59 @@ func (s *Server) handleGalleryDelete(w http.ResponseWriter, r *http.Request) {
 	os.Remove(filepath.Join(galleryDir, id+".png"))
 	os.Remove(filepath.Join(galleryDir, id+".json"))
 	writeJSON(w, map[string]interface{}{"deleted": id})
+}
+
+// handleNewsProxy proxies /api/news/* to the local rss_server.
+func (s *Server) handleNewsProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(200)
+		return
+	}
+
+	// Map route
+	var targetPath string
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/feeds"):
+		targetPath = "/feeds"
+	case strings.HasSuffix(r.URL.Path, "/articles"):
+		targetPath = "/articles"
+	case strings.HasSuffix(r.URL.Path, "/search"):
+		targetPath = "/search"
+	case strings.HasSuffix(r.URL.Path, "/refresh"):
+		targetPath = "/refresh"
+	case strings.HasSuffix(r.URL.Path, "/status"):
+		targetPath = "/status"
+	default:
+		http.Error(w, "unknown news endpoint", 404)
+		return
+	}
+
+	targetURL := fmt.Sprintf("http://localhost:8094%s", targetPath)
+	if r.URL.RawQuery != "" {
+		targetURL += "?" + r.URL.RawQuery
+	}
+
+	body, _ := io.ReadAll(r.Body)
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	proxyReq, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("RSS server unreachable: %s", err.Error())})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(respBody)
 }

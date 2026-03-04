@@ -322,4 +322,15 @@ export const api = {
         if (!res.ok) throw new Error(`Delete error: ${res.status}`);
         return res.json();
     },
+
+    // News
+    getNewsFeeds: () => fetchJSON<{ feeds: Array<{ category: string; feeds: string[]; article_count: number }> }>('/news/feeds'),
+    getNewsArticles: (category?: string, page: number = 1) => {
+        const params = new URLSearchParams({ page: String(page), limit: '20' });
+        if (category) params.set('feed', category);
+        return fetchJSON<{ articles: Array<{ id: string; title: string; link: string; source: string; category: string; published: string; summary: string }>; total: number; page: number; pages: number }>(`/news/articles?${params}`);
+    },
+    searchNews: (query: string) => fetchJSON<{ articles: Array<{ id: string; title: string; link: string; source: string; category: string; published: string; summary: string }>; total: number }>(`/news/search?q=${encodeURIComponent(query)}`),
+    refreshNews: async () => { const res = await fetch(API_BASE + '/news/refresh', { method: 'POST' }); return res.json(); },
+    getNewsStatus: () => fetchJSON<{ online: boolean; feeds: number; articles: number; refreshing: boolean }>('/news/status'),
 };
