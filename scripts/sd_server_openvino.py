@@ -30,6 +30,11 @@ DEFAULT_HEIGHT = 512
 def load_pipeline():
     """Load the SDXS 1-step pipeline with OpenVINO optimization."""
     global pipeline
+
+    # Force OpenVINO threading config via env (must be set before import)
+    os.environ["OMP_NUM_THREADS"] = "4"
+    os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
+
     print("[sd_server] Loading OpenVINO SDXS pipeline...")
     start = time.time()
 
@@ -44,12 +49,22 @@ def load_pipeline():
         pipeline = OVStableDiffusionPipeline.from_pretrained(
             cache_dir,
             device="CPU",
+            ov_config={
+                "INFERENCE_NUM_THREADS": 4,
+                "PERFORMANCE_HINT": "LATENCY",
+                "ENABLE_CPU_PINNING": "YES",
+            },
         )
     else:
         print("[sd_server] Downloading pre-exported SDXS OpenVINO model (first run)...")
         pipeline = OVStableDiffusionPipeline.from_pretrained(
             model_id,
             device="CPU",
+            ov_config={
+                "INFERENCE_NUM_THREADS": 4,
+                "PERFORMANCE_HINT": "LATENCY",
+                "ENABLE_CPU_PINNING": "YES",
+            },
         )
         pipeline.save_pretrained(cache_dir)
         print(f"[sd_server] Model cached to {cache_dir}")

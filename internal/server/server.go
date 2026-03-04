@@ -952,8 +952,6 @@ func (s *Server) handlePhoneStart(w http.ResponseWriter, r *http.Request) {
 			`--threads 2 --parallel 1 --ctx-size 4096 `+
 			`--batch-size 512 --ubatch-size 256 `+
 			`--flash-attn on `+
-			`--cache-type-k q8_0 --cache-type-v q8_0 `+
-			`--prio 2 `+
 			`> /dev/null 2>&1 &`,
 		req.Model,
 	)
