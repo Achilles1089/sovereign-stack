@@ -83,7 +83,7 @@ func DefaultConfig() *Config {
 		},
 		AI: AIConfig{
 			Enabled:      true,
-			Host:         "localhost:8085",
+			Host:         "localhost:8087",
 			ImageGenHost: "10.0.0.2:8090",
 		},
 		Backup: BackupConfig{
