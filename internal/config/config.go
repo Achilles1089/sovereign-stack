@@ -50,6 +50,7 @@ type AIConfig struct {
 	VoiceHost    string `yaml:"voice_host"`     // "localhost:8088" — Brain Net voice server (Whisper+Piper)
 	MusicGenHost string `yaml:"music_gen_host"` // "10.0.0.2:8091" — Envy music gen server
 	RAGHost      string `yaml:"rag_host"`       // "localhost:8093" — Brain Net RAG server
+	AgentHost    string `yaml:"agent_host"`     // "localhost:8095" — Achilles agent daemon
 }
 
 // BackupConfig holds backup settings
@@ -91,6 +92,7 @@ func DefaultConfig() *Config {
 			VoiceHost:    "localhost:8088",
 			MusicGenHost: "10.0.0.2:8091",
 			RAGHost:      "localhost:8093",
+			AgentHost:    "localhost:8095",
 		},
 		Backup: BackupConfig{
 			Enabled:  true,

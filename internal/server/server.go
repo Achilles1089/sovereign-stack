@@ -94,6 +94,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/news/status", s.handleNewsProxy)
 	mux.HandleFunc("/api/resources/live", s.handleResourcesLive)
 	mux.HandleFunc("/api/envy/sysinfo", s.handleEnvySysinfo)
+	mux.HandleFunc("/api/agent/chat", s.handleAgentChat)
+	mux.HandleFunc("/api/agent/status", s.handleAgentStatus)
+	mux.HandleFunc("/api/agent/clear", s.handleAgentClear)
 
 	// Serve static dashboard files (SPA fallback)
 	if s.staticDir != "" {
@@ -1572,4 +1575,114 @@ func (s *Server) handleNewsProxy(w http.ResponseWriter, r *http.Request) {
 	respBody, _ := io.ReadAll(resp.Body)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(respBody)
+}
+
+// handleAgentChat proxies chat requests to the Achilles agent daemon and streams the response.
+func (s *Server) handleAgentChat(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(204)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	agentHost := s.cfg.AI.AgentHost
+	if agentHost == "" {
+		agentHost = "localhost:8095"
+	}
+
+	// Read and forward the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to read request"})
+		return
+	}
+
+	// Proxy to agent daemon — long timeout for tool execution
+	client := &http.Client{Timeout: 300 * time.Second}
+	proxyReq, err := http.NewRequest("POST", fmt.Sprintf("http://%s/chat", agentHost), bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": fmt.Sprintf("agent daemon unreachable: %s", err.Error())})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Stream the response back — same SSE pattern as handleAIChat
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Connection", "keep-alive")
+	flusher, ok := w.(http.Flusher)
+
+	buf := make([]byte, 1024)
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			w.Write(buf[:n])
+			if ok {
+				flusher.Flush()
+			}
+		}
+		if readErr != nil {
+			break
+		}
+	}
+}
+
+// handleAgentStatus returns the agent daemon's health status.
+func (s *Server) handleAgentStatus(w http.ResponseWriter, r *http.Request) {
+	agentHost := s.cfg.AI.AgentHost
+	if agentHost == "" {
+		agentHost = "localhost:8095"
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://%s/status", agentHost))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+	defer resp.Body.Close()
+
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		writeJSON(w, map[string]interface{}{"online": false})
+		return
+	}
+	writeJSON(w, data)
+}
+
+// handleAgentClear clears the agent's conversation memory.
+func (s *Server) handleAgentClear(w http.ResponseWriter, r *http.Request) {
+	agentHost := s.cfg.AI.AgentHost
+	if agentHost == "" {
+		agentHost = "localhost:8095"
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://%s/clear", agentHost))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		writeJSON(w, map[string]interface{}{"error": "failed to parse response"})
+		return
+	}
+	writeJSON(w, data)
 }

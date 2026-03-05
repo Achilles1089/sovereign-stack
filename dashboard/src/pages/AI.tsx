@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { api, type AIModel, type AIStatus, type SystemResources, type ServiceStatus, type CatalogEntry, type PhoneStatus, type PhoneModel, type BrainNetLive, type EnvySysinfo } from '../api/client';
+import { api, type AIModel, type AIStatus, type SystemResources, type ServiceStatus, type CatalogEntry, type PhoneStatus, type PhoneModel, type BrainNetLive, type EnvySysinfo, type AgentStatus } from '../api/client';
 
 interface Message {
     role: 'user' | 'assistant' | 'system';
@@ -15,6 +15,7 @@ const TERMINAL_COMMANDS = [
     { cmd: '/voice', desc: 'Toggle voice mode (auto-speak responses)' },
     { cmd: '/music', desc: 'Generate music (e.g. /music ambient piano)' },
     { cmd: '/doc', desc: 'Document chat (upload/list/search/ask/delete)' },
+    { cmd: '/agent', desc: 'Toggle Achilles agent mode (Claude Sonnet 4.6)' },
     { cmd: '/clear', desc: 'Clear terminal' },
     { cmd: '/help', desc: 'Show available commands' },
 ];
@@ -86,6 +87,10 @@ export default function AI() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [musicNodeOnline, setMusicNodeOnline] = useState(false);
 
+    // Achilles Agent mode (Claude Sonnet 4.6)
+    const [agentMode, setAgentMode] = useState(() => localStorage.getItem('agent-mode') === 'true');
+    const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
+
     // Gallery state
     const [showGallery, setShowGallery] = useState(false);
     const [galleryImages, setGalleryImages] = useState<Array<{ id: string; prompt: string; width: number; height: number; created_at: string; size_bytes: number }>>([]);
@@ -141,6 +146,9 @@ export default function AI() {
         api.getBrainNetLive().then(d => setBrainLive(d)).catch(() => { });
         api.getEnvySysinfo().then(d => setEnvySysinfo(d)).catch(() => { });
 
+        // Check agent status
+        api.getAgentStatus().then(d => setAgentStatus(d)).catch(() => setAgentStatus(null));
+
         const interval = setInterval(() => {
             fetchSystem();
             fetchPhoneStatus();
@@ -148,6 +156,7 @@ export default function AI() {
             api.getMusicStatus().then(d => setMusicNodeOnline(d.online)).catch(() => setMusicNodeOnline(false));
             api.getBrainNetLive().then(d => setBrainLive(d)).catch(() => { });
             api.getEnvySysinfo().then(d => setEnvySysinfo(d)).catch(() => { });
+            api.getAgentStatus().then(d => setAgentStatus(d)).catch(() => setAgentStatus(null));
         }, 15000);
         // Initial image node check
         api.getImageStatus().then(d => setImageNodeOnline(d.online)).catch(() => setImageNodeOnline(false));
@@ -484,6 +493,17 @@ export default function AI() {
             setMessages(prev => [...prev, { role: 'system', content: 'Document commands:\n  /doc upload    Upload a PDF or text file\n  /doc list      List uploaded documents\n  /doc search    Search documents (e.g. /doc search quantum physics)\n  /doc ask       Ask a question using document context\n  /doc delete    Remove a document (e.g. /doc delete notes.pdf)' }]);
             return true;
         }
+        if (command === '/agent') {
+            const next = !agentMode;
+            setAgentMode(next);
+            localStorage.setItem('agent-mode', String(next));
+            if (next) {
+                setMessages(prev => [...prev, { role: 'system', content: '🏴‍☠️ ACHILLES AGENT MODE — Claude Sonnet 4.6 with tool-use\n  11 tools active: system_info, execute_command, generate_image, search_news, weather, ...\n  Type naturally — Achilles will use tools as needed.' }]);
+            } else {
+                setMessages(prev => [...prev, { role: 'system', content: 'Agent mode OFF — back to local LLM on phone.' }]);
+            }
+            return true;
+        }
         return false;
     };
 
@@ -514,11 +534,7 @@ export default function AI() {
         abortRef.current = controller;
 
         try {
-            const chatMessages = messages.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
-            chatMessages.push({ role: 'user' as const, content: input });
-            // Limit context to last 10 messages — phone CPU prefill is slow on long history
-            const contextWindow = chatMessages.slice(-contextSize);
-            await api.chat(phoneStatus?.model || '', contextWindow, (chunk) => {
+            const onChunk = (chunk: string) => {
                 // Buffer chunks and batch state updates via requestAnimationFrame
                 chunkBufferRef.current += chunk;
                 if (!rafRef.current) {
@@ -536,7 +552,18 @@ export default function AI() {
                         });
                     });
                 }
-            }, controller.signal);
+            };
+
+            if (agentMode) {
+                // Achilles Agent — Claude Sonnet 4.6 with tool-use
+                await api.agentChat(input, onChunk, controller.signal);
+            } else {
+                // Phone LLM — local inference
+                const chatMessages = messages.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
+                chatMessages.push({ role: 'user' as const, content: input });
+                const contextWindow = chatMessages.slice(-contextSize);
+                await api.chat(phoneStatus?.model || '', contextWindow, onChunk, controller.signal);
+            }
         } catch (e) {
             if ((e as Error).name === 'AbortError') {
                 // User stopped — keep whatever was generated so far
@@ -891,21 +918,32 @@ export default function AI() {
 
                 <div className="terminal-chat" style={{ '--crt-main': crtMain, '--crt-dim': crtDim, '--crt-glow': crtGlow } as React.CSSProperties}>
                     <div className="terminal-header">
-                        <span className="terminal-header-title">SOVEREIGN-OS v1.0 ─── {phoneStatus?.running ? 'READY' : 'OFFLINE'}</span>
+                        <span className="terminal-header-title">{agentMode ? 'ACHILLES v1.0 ─── ' + (agentStatus?.online ? 'READY' : 'OFFLINE') : `SOVEREIGN-OS v1.0 ─── ${phoneStatus?.running ? 'READY' : 'OFFLINE'}`}</span>
                         <div className="terminal-header-status">
-                            {phoneStatus?.running && (
-                                <span style={{ color: crtDim, fontSize: 10 }}>
-                                    {formatParams(phoneStatus.params)} │ {formatContext(phoneStatus.context)}ctx
-                                    {phoneStatus.model ? ` │ ${phoneStatus.model.replace('.gguf', '').split('-').pop()?.toUpperCase()}` : ''}
-                                </span>
+                            {agentMode ? (
+                                <>
+                                    <span style={{ color: crtDim, fontSize: 10 }}>
+                                        {agentStatus?.tools || 0} tools │ {agentStatus?.memory_messages || 0} msgs
+                                    </span>
+                                    <span style={{ color: crtMain }}>🏴‍☠️ {agentStatus?.display_name || 'Achilles'}</span>
+                                </>
+                            ) : (
+                                <>
+                                    {phoneStatus?.running && (
+                                        <span style={{ color: crtDim, fontSize: 10 }}>
+                                            {formatParams(phoneStatus.params)} │ {formatContext(phoneStatus.context)}ctx
+                                            {phoneStatus.model ? ` │ ${phoneStatus.model.replace('.gguf', '').split('-').pop()?.toUpperCase()}` : ''}
+                                        </span>
+                                    )}
+                                    {imageNodeOnline && (
+                                        <span style={{ color: crtDim, fontSize: 10 }}>│ 🎨</span>
+                                    )}
+                                    {phoneStatus?.running && (
+                                        <span style={{ color: crtMain }}>{phoneStatus.display_name || phoneStatus.model}</span>
+                                    )}
+                                </>
                             )}
-                            {imageNodeOnline && (
-                                <span style={{ color: crtDim, fontSize: 10 }}>│ 🎨</span>
-                            )}
-                            {phoneStatus?.running && (
-                                <span style={{ color: crtMain }}>{phoneStatus.display_name || phoneStatus.model}</span>
-                            )}
-                            <span className={`terminal-dot ${phoneStatus?.running ? 'on' : 'off'}`} />
+                            <span className={`terminal-dot ${agentMode ? (agentStatus?.online ? 'on' : 'off') : (phoneStatus?.running ? 'on' : 'off')}`} />
                             <button
                                 className="clear-chat-btn"
                                 onClick={() => setMessages([{ role: 'system', content: 'Terminal cleared.' }])}

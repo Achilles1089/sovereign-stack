@@ -126,6 +126,14 @@ export interface EnvySysinfo {
     uptime_secs?: number;
 }
 
+export interface AgentStatus {
+    online: boolean;
+    model: string;
+    display_name: string;
+    tools: number;
+    memory_messages: number;
+}
+
 async function fetchJSON<T>(path: string): Promise<T> {
     const res = await fetch(API_BASE + path);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -333,4 +341,30 @@ export const api = {
     searchNews: (query: string) => fetchJSON<{ articles: Array<{ id: string; title: string; link: string; source: string; category: string; published: string; summary: string }>; total: number }>(`/news/search?q=${encodeURIComponent(query)}`),
     refreshNews: async () => { const res = await fetch(API_BASE + '/news/refresh', { method: 'POST' }); return res.json(); },
     getNewsStatus: () => fetchJSON<{ online: boolean; feeds: number; articles: number; refreshing: boolean }>('/news/status'),
+
+    // Achilles Agent (Claude Sonnet 4.6)
+    getAgentStatus: () => fetchJSON<AgentStatus>('/agent/status'),
+    clearAgentHistory: () => fetch(API_BASE + '/agent/clear').then(r => r.json()),
+    agentChat: async (message: string, onChunk: (text: string) => void, signal?: AbortSignal) => {
+        const res = await fetch(API_BASE + '/agent/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message }),
+            signal,
+        });
+        if (!res.ok) throw new Error(`Agent error: ${res.status}`);
+        const reader = res.body?.getReader();
+        if (!reader) return;
+        const decoder = new TextDecoder();
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                onChunk(decoder.decode(value, { stream: true }));
+            }
+        } catch (e) {
+            reader.cancel();
+            throw e;
+        }
+    },
 };
