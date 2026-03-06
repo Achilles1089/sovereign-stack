@@ -1,0 +1,54 @@
+# Sovereign Stack — Cline Context
+
+You are working inside the **Sovereign Stack**, a self-hosted cloud and AI platform. Your workspace contains the full codebase and configuration for a multi-node sovereign infrastructure.
+
+## Architecture
+
+- **Go CLI** (`cmd/`, `internal/`): Orchestration binary — `sovereign <command>`
+- **React Dashboard** (`dashboard/`): Vite + TypeScript control panel served at port 3000
+- **App Catalog** (`internal/apps/installer.go`): 30+ Docker-based apps managed via `sovereign app install <name>`
+- **AI Layer** (`internal/ai/`, `scripts/`): Local LLM inference, phone AI nodes, RAG, voice, image gen
+- **Mesh Network** (`internal/mesh/`): WireGuard-based private network connecting all nodes
+- **Phone Nodes** (`sovereign-ios/`): Swift/Vapor iOS inference server with Metal GPU
+
+## Fleet Nodes
+
+| Node | Role | Access |
+|:---|:---|:---|
+| **Mini PC** | Docker host, Go API server, dashboard | Local filesystem (this workspace) |
+| **Envy PC** | GPU compute, AI training (H200) | SSH over WireGuard mesh |
+| **Android Phone** | Termux LLM inference (Qwen/RWKV) | SSH over mesh or USB (`adb forward`) |
+| **iPhone** | Metal-accelerated LLM + Stable Diffusion | SSH over mesh or USB (`iproxy`) |
+| **Chromebook** | Client — accesses dashboard & code-server | Browser only |
+
+## Key Commands
+
+```bash
+sovereign status          # Show all service statuses
+sovereign app list        # List available apps
+sovereign app install X   # Install an app via Docker Compose
+sovereign mesh status     # Show WireGuard mesh peers
+sovereign ai status       # Local AI inference status
+```
+
+## Conventions
+
+- Passwords default to `sovereign` (change in production)
+- All Docker containers are prefixed `sovereign-`
+- Caddy reverse proxy handles routing (`/app-name` → container port)
+- Config lives in `~/.sovereign/`
+- The Go binary is built with `go build -o sovereign .`
+
+## Code Standards
+
+- Go code follows standard `gofmt` formatting
+- Dashboard uses TypeScript strict mode, React functional components
+- API client is in `dashboard/src/api/client.ts` — all endpoints are documented there
+- New apps go in the `BuiltinApps` slice in `internal/apps/installer.go`
+
+## When Making Changes
+
+1. **Read the code first** — grep and trace before editing
+2. **Run tests** — `go test ./...` before committing
+3. **Check the dashboard** — changes to the Go API should be reflected in `client.ts`
+4. **Respect the mesh** — network changes affect all nodes

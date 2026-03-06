@@ -289,6 +289,19 @@ var BuiltinApps = []AppManifest{
 		Compose:    AppCompose{Image: "ghcr.io/ajnart/homarr:latest", Ports: []string{"7575:7575"}, Volumes: []string{"homarr_data:/app/data/configs", "/var/run/docker.sock:/var/run/docker.sock:ro"}},
 		CaddyRoute: &CaddyRoute{Path: "/homarr", Port: 7575},
 	},
+
+	// AI Development
+	{
+		Name: "code-server", DisplayName: "Code Server + Cline", Description: "VS Code in the browser with AI coding assistant",
+		Category: "development", Version: "4.96", Website: "https://coder.com",
+		Requires: AppRequirements{MinRAMMB: 1024, MinDiskGB: 2},
+		Compose: AppCompose{
+			Image: "codercom/code-server:latest", Ports: []string{"8443:8080"},
+			Volumes: []string{"codeserver_data:/home/coder/.local/share/code-server", "/home/hschaheen:/home/coder/workspace:rw"},
+			Environment: []string{"PASSWORD=sovereign", "SUDO_PASSWORD=sovereign", "DEFAULT_WORKSPACE=/home/coder/workspace"},
+		},
+		CaddyRoute: &CaddyRoute{Path: "/code", Port: 8443},
+	},
 }
 
 // FindApp looks up an app by name in the catalog
